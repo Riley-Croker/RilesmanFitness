@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-ChildItem -Path temp-app -Recurse | ForEach-Object { $dest = $_FullName.Replace\\(''temp-app'', ''.''\\); if \\($_PSIsContainer\\) { New-Item -ItemType Directory -Path $dest -Force | Out-Null } else { Copy-Item $_FullName $dest -Force } }; Remove-Item temp-app -Recurse -Force\")",
+      "Bash(powershell -Command \"Copy-Item -Path ''temp-app\\\\*'' -Destination ''.'' -Recurse -Force; Copy-Item -Path ''temp-app\\\\.gitignore'' -Destination ''.'' -Force -ErrorAction SilentlyContinue\")",
+      "Bash(npm install:*)",
+      "Bash(npx prisma init:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx next build:*)",
+      "Bash(ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx tsx:*)"
+    ]
+  }
+}
