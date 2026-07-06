@@ -6,6 +6,9 @@ your strength over time. Next.js + MySQL + the public-domain
 (bundled locally).
 
 **Full documentation: [DOCUMENTATION.md](DOCUMENTATION.md)**
+**Learn how it all works: [learning/README.md](learning/README.md)** — a
+12-module Next.js/TypeScript course for C#/.NET developers, taught
+through this app's own code.
 
 ## Quick start
 
