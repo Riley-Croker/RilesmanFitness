@@ -43,7 +43,7 @@ export default async function WorkoutsPage() {
                 <div>
                   <p className="text-lg font-semibold">{w.name}</p>
                   <p className="text-sm text-zinc-400">
-                    {new Date(w.date).toLocaleDateString("en-AU", {
+                    {new Date(w.date).toLocaleDateString("en-US", {
                       weekday: "long",
                       day: "numeric",
                       month: "long",

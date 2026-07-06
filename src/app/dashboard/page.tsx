@@ -13,7 +13,7 @@ import { toDisplayWeight } from "@/lib/units";
 export const dynamic = "force-dynamic";
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-AU", {
+  return new Date(iso).toLocaleDateString("en-US", {
     weekday: "short",
     day: "numeric",
     month: "short",

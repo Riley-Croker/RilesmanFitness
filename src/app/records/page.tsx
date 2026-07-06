@@ -62,7 +62,7 @@ export default async function RecordsPage() {
                   </td>
                   <td className="px-4 py-3">{toDisplayWeight(r.est1rm, unit)} {unit}</td>
                   <td className="px-4 py-3 text-zinc-400">
-                    {new Date(r.date).toLocaleDateString("en-AU")}
+                    {new Date(r.date).toLocaleDateString("en-US")}
                   </td>
                 </tr>
               ))}

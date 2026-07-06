@@ -125,7 +125,7 @@ export default async function ExerciseDetailPage({
                 {history.map((h, i) => (
                   <tr key={i} className="border-t border-zinc-800">
                     <td className="px-4 py-2.5 text-zinc-400">
-                      {new Date(h.date).toLocaleDateString("en-AU")}
+                      {new Date(h.date).toLocaleDateString("en-US")}
                     </td>
                     <td className="px-4 py-2.5">
                       <Link href={`/workouts/${h.workoutId}`} className="hover:text-lime-400">

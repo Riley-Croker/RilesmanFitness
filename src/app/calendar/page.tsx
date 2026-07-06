@@ -62,7 +62,7 @@ export default async function CalendarPage({
             ←
           </Link>
           <span className="min-w-40 text-center font-semibold">
-            {first.toLocaleDateString("en-AU", { month: "long", year: "numeric" })}
+            {first.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </span>
           <Link
             href={`/calendar?month=${fmt(next)}`}

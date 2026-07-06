@@ -45,7 +45,7 @@ export default function ProgressCharts({
             maxWeight: toDisplayWeight(p.maxWeight, weightUnit),
             volume: Math.round(toDisplayWeight(p.volume, weightUnit)),
             est1rm: toDisplayWeight(p.est1rm, weightUnit),
-            date: new Date(p.date).toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
+            date: new Date(p.date).toLocaleDateString("en-US", { day: "numeric", month: "short" }),
           }))
         );
       })
