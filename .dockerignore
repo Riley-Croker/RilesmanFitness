@@ -1,0 +1,28 @@
+# Everything here is excluded from the build context Docker uploads.
+# Without this file, COPY . . would overwrite the clean `npm ci` install
+# from the deps stage with Windows-built binaries, and the context upload
+# would carry hundreds of megabytes on every build.
+node_modules
+.next
+out
+
+.git
+.gitignore
+
+# Secrets must never enter an image layer - layers are readable by anyone
+# who can pull it, even if a later step deletes the file.
+.env
+.env.*
+
+npm-debug.log*
+yarn-error.log*
+
+# Docs and the learning course: nothing the build reads.
+README.md
+DOCUMENTATION.md
+learning
+
+Dockerfile
+.dockerignore
+.claude
+.vscode
