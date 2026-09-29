@@ -17,6 +17,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { withBasePath } from "@/lib/base-path";
 import { toDisplayWeight, type WeightUnit } from "@/lib/units";
 import type { ProgressPoint } from "@/types";
 
@@ -29,13 +30,16 @@ export default function ProgressCharts({
 }) {
   const [selected, setSelected] = useState(exerciseNames[0] ?? "");
   const [data, setData] = useState<ProgressPoint[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Which selection `data` belongs to. Loading is derived from it rather than
+  // stored, so the effect never has to set state before the fetch starts.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const requestKey = `${selected}|${weightUnit}`;
+  const loading = Boolean(selected) && loadedFor !== requestKey;
 
   useEffect(() => {
     if (!selected) return;
     let cancelled = false;
-    setLoading(true);
-    fetch(`/api/stats/progress?exercise=${encodeURIComponent(selected)}`)
+    fetch(withBasePath(`/api/stats/progress?exercise=${encodeURIComponent(selected)}`))
       .then((r) => r.json())
       .then((points: ProgressPoint[]) => {
         if (cancelled) return;
@@ -49,7 +53,7 @@ export default function ProgressCharts({
           }))
         );
       })
-      .finally(() => !cancelled && setLoading(false));
+      .finally(() => !cancelled && setLoadedFor(`${selected}|${weightUnit}`));
     return () => {
       cancelled = true;
     };

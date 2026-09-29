@@ -60,7 +60,7 @@ word appears that you can't place.
    ```bash
    npm.cmd run dev
    ```
-   Then keep http://localhost:3000 open. Every module asks you to poke at
+   Then keep http://localhost:3000/workout open. Every module asks you to poke at
    something live. (Use `npm.cmd` rather than `npm` if PowerShell's
    execution policy is still blocking scripts.)
 

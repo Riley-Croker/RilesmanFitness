@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import ExerciseImage from "@/components/exercise-image";
+import { withBasePath } from "@/lib/base-path";
 import type { Exercise, ExercisePage } from "@/types";
 
 const BODY_PARTS = [
@@ -36,7 +37,9 @@ export default function ExercisePicker({
         const params = new URLSearchParams({ limit: "10" });
         if (search.trim()) params.set("search", search.trim());
         if (bodyPart) params.set("bodyPart", bodyPart);
-        const res = await fetch(`/api/exercises?${params}`, { signal: controller.signal });
+        const res = await fetch(withBasePath(`/api/exercises?${params}`), {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error("request failed");
         const page = (await res.json()) as ExercisePage;
         setResults(page.exercises);

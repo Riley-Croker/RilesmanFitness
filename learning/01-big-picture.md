@@ -205,7 +205,7 @@ production output.
 
 ## Part 5 — Life of a request
 
-You type `http://localhost:3000/dashboard` and press Enter.
+You type `http://localhost:3000/workout/dashboard` and press Enter.
 
 **1. The browser sends `GET /dashboard`** to the Node process on port 3000.
 

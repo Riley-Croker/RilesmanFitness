@@ -15,7 +15,7 @@ through this app's own code.
 ```powershell
 npm install       # once
 npm run db:init   # once — creates the rilesman_fitness MySQL database
-npm run dev       # start → http://localhost:3000
+npm run dev       # start → http://localhost:3000/workout
 ```
 
 Requires Node.js and a MySQL/MariaDB server on localhost:3306

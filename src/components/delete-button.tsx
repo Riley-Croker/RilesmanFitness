@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { withBasePath } from "@/lib/base-path";
 
 export default function DeleteButton({
   url,
@@ -20,7 +21,7 @@ export default function DeleteButton({
 
   const doDelete = async () => {
     setBusy(true);
-    const res = await fetch(url, { method: "DELETE" });
+    const res = await fetch(withBasePath(url), { method: "DELETE" });
     if (res.ok) {
       if (redirectTo) router.push(redirectTo);
       router.refresh();

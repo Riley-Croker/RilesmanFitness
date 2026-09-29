@@ -358,7 +358,7 @@ The two modes:
    }
    ```
 
-   Visit http://localhost:3000/about. Notice what you did *not* do: no
+   Visit http://localhost:3000/workout/about. Notice what you did *not* do: no
    route registration, no server restart.
 
 2. **Make it dynamic.** Create `src/app/about/[topic]/page.tsx`:

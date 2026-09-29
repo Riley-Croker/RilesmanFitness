@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logoutAction } from "@/lib/actions";
+import { withBasePath } from "@/lib/base-path";
 import type { WeightUnit } from "@/lib/units";
 
 const LINKS = [
@@ -32,7 +33,7 @@ export default function Nav({
   const toggleUnit = async () => {
     setSwitching(true);
     const next = weightUnit === "lbs" ? "kg" : "lbs";
-    await fetch("/api/settings", {
+    await fetch(withBasePath("/api/settings"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ weightUnit: next }),

@@ -63,10 +63,10 @@ npm run db:init      # create the rilesman_fitness database and tables
 ### Every time
 
 ```powershell
-npm run dev          # start the dev server → http://localhost:3000
+npm run dev          # start the dev server → http://localhost:3000/workout
 ```
 
-Then open http://localhost:3000, click **Sign up**, create an account, and
+Then open http://localhost:3000/workout, click **Sign up**, create an account, and
 start logging.
 
 Configuration lives in [.env](.env): database host/port/user/password/name,

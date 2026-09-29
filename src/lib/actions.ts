@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { signIn, signOut } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { withBasePath } from "@/lib/base-path";
 
 // Next signals a successful redirect by throwing an error whose digest
 // starts with NEXT_REDIRECT — that must be rethrown, not swallowed.
@@ -28,7 +29,7 @@ export async function loginAction(
     await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
-      redirectTo: "/dashboard",
+      redirectTo: withBasePath("/dashboard"),
     });
   } catch (error) {
     // signIn redirects on success by throwing — let that through.
@@ -77,7 +78,7 @@ export async function registerAction(
 
   // Log the new user straight in.
   try {
-    await signIn("credentials", { email, password, redirectTo: "/dashboard" });
+    await signIn("credentials", { email, password, redirectTo: withBasePath("/dashboard") });
   } catch (error) {
     if (isRedirectError(error)) throw error;
     if (error instanceof AuthError) return "Account created — please log in.";
@@ -86,5 +87,5 @@ export async function registerAction(
 }
 
 export async function logoutAction() {
-  await signOut({ redirectTo: "/login" });
+  await signOut({ redirectTo: withBasePath("/login") });
 }

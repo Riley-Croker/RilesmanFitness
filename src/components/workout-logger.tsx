@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ExerciseImage from "@/components/exercise-image";
 import ExercisePicker from "@/components/exercise-picker";
+import { withBasePath } from "@/lib/base-path";
 import { toStoredLbs, type WeightUnit } from "@/lib/units";
 import type { Exercise, WorkoutExerciseInput } from "@/types";
 
@@ -96,7 +97,7 @@ export default function WorkoutLogger({
         ...ex,
         sets: ex.sets.map((s) => ({ ...s, weight: toStoredLbs(s.weight || 0, weightUnit) })),
       }));
-      const res = await fetch("/api/workouts", {
+      const res = await fetch(withBasePath("/api/workouts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, date, notes, exercises: payload }),
@@ -117,7 +118,7 @@ export default function WorkoutLogger({
     setError(null);
     if (!name.trim()) return setError("Give your workout a name first — it becomes the template name.");
     if (exercises.length === 0) return setError("Add at least one exercise.");
-    const res = await fetch("/api/templates", {
+    const res = await fetch(withBasePath("/api/templates"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

@@ -337,7 +337,7 @@ Four things worth knowing about `fetch`:
 ## Try it
 
 1. **Hit the API by hand.** With the app open and logged in, visit
-   http://localhost:3000/api/workouts — raw JSON of your workouts. Now open
+   http://localhost:3000/workout/api/workouts — raw JSON of your workouts. Now open
    the same URL in a private window: `{"error":"Unauthorized"}`. That
    difference is entirely the session cookie.
 

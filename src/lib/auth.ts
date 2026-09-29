@@ -7,6 +7,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { withBasePath } from "@/lib/base-path";
 
 interface UserRow {
   id: string;
@@ -17,7 +18,14 @@ interface UserRow {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
+  // NextAuth's own basePath stays at its default, "/api/auth": Next strips
+  // /workout from the URL before the route handler sees it. Don't put a path
+  // in AUTH_URL either - NextAuth would adopt it as this basePath and every
+  // auth route would fail with UnknownAction.
+  //
+  // Redirect targets are different: NextAuth turns them into absolute URLs
+  // from the origin alone, so they need the prefix written in.
+  pages: { signIn: withBasePath("/login") },
   providers: [
     Credentials({
       credentials: {
