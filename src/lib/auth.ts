@@ -38,6 +38,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) return null;
 
+        // Someone who signed up through another rcroker.dev app has a
+        // common.users row but no profile row here yet. Create it on first
+        // login; IGNORE makes this a no-op for everyone who already has one.
+        await db.execute("INSERT IGNORE INTO users (id) VALUES (?)", [user.id]);
+
         return { id: user.id, name: user.name, email: user.email };
       },
     }),
