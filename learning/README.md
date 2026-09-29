@@ -78,7 +78,7 @@ word appears that you can't place.
    whether you understand a piece of code.
 
 5. **The database is disposable.** If you wreck your data, drop the
-   `workout_app2` database and run `npm run db:init` to rebuild the schema
+   `rilesman_fitness` database and run `npm run db:init` to rebuild the schema
    from [scripts/schema.sql](../scripts/schema.sql). You'll need to register
    an account again afterwards — there's no seed script.
 

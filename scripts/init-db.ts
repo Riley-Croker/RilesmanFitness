@@ -16,7 +16,7 @@ async function initDatabase() {
   });
 
   await connection.query(schema);
-  console.log("Database 'workout_app2' initialized successfully!");
+  console.log("Databases 'common' and 'rilesman_fitness' initialized successfully!");
   await connection.end();
 }
 

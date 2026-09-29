@@ -1,4 +1,4 @@
-# Rilesman Fitness (WorkoutApp2)
+# Rilesman Fitness
 
 Log workouts, browse 870+ exercises with photo demonstrations, and track
 your strength over time. Next.js + MySQL + the public-domain
@@ -14,7 +14,7 @@ through this app's own code.
 
 ```powershell
 npm install       # once
-npm run db:init   # once — creates the workout_app2 MySQL database
+npm run db:init   # once — creates the rilesman_fitness MySQL database
 npm run dev       # start → http://localhost:3000
 ```
 

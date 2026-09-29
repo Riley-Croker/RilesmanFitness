@@ -50,15 +50,30 @@ export async function registerAction(
   if (!/^\S+@\S+\.\S+$/.test(email)) return "Please enter a valid email address.";
   if (password.length < 8) return "Password must be at least 8 characters.";
 
-  const [existing] = await db.execute("SELECT id FROM users WHERE email = ?", [email]);
+  const [existing] = await db.execute("SELECT id FROM common.users WHERE email = ?", [email]);
   if ((existing as unknown[]).length > 0) return "An account with that email already exists.";
 
   const id = crypto.randomUUID();
   const passwordHash = await bcrypt.hash(password, 12);
-  await db.execute(
-    "INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)",
-    [id, name, email, passwordHash]
-  );
+
+  // Two rows, same id: identity in the shared common.users, and this app's
+  // profile row in rilesman_fitness.users (which workouts/templates FK to).
+  // One transaction so we never end up with half an account.
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute(
+      "INSERT INTO common.users (id, name, email, password_hash) VALUES (?, ?, ?, ?)",
+      [id, name, email, passwordHash]
+    );
+    await conn.execute("INSERT INTO users (id) VALUES (?)", [id]);
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 
   // Log the new user straight in.
   try {

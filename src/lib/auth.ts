@@ -1,6 +1,7 @@
 // NextAuth v5 configured for email/password (Credentials provider).
 // Sessions are stateless JWTs signed with AUTH_SECRET — no session table
-// needed. Passwords are verified against bcrypt hashes in the users table.
+// needed. Passwords are verified against bcrypt hashes in common.users, the
+// identity table shared by every app on rcroker.dev.
 
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
@@ -28,7 +29,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
 
-        const [rows] = await db.execute("SELECT * FROM users WHERE email = ?", [
+        const [rows] = await db.execute("SELECT * FROM common.users WHERE email = ?", [
           email.toLowerCase().trim(),
         ]);
         const user = (rows as UserRow[])[0];

@@ -1,4 +1,4 @@
-# Rilesman Fitness (WorkoutApp2) — Full Documentation
+# Rilesman Fitness — Full Documentation
 
 An interactive web application for logging workouts, browsing an exercise
 library of 873 movements with photo demonstrations, and tracking strength
@@ -55,9 +55,9 @@ changes:
 ### First-time setup
 
 ```powershell
-cd C:\Users\rcrok\Desktop\Dev\WorkoutApp2
+cd C:\Users\rcrok\Desktop\Dev\RilesmanFitness
 npm install          # install dependencies
-npm run db:init      # create the workout_app2 database and tables
+npm run db:init      # create the rilesman_fitness database and tables
 ```
 
 ### Every time
@@ -193,7 +193,7 @@ All computed with SQL in [src/lib/queries.ts](src/lib/queries.ts):
 
 ## 5. Database schema
 
-Database: `workout_app2` (created by `npm run db:init` from
+Database: `rilesman_fitness` (created by `npm run db:init` from
 [scripts/schema.sql](scripts/schema.sql)).
 
 ```
@@ -240,7 +240,7 @@ ever touch the signed-in user's rows.
 ## 7. Project structure
 
 ```
-WorkoutApp2/
+RilesmanFitness/
 ├── .env                        # DB credentials, AUTH_SECRET, API base URL
 ├── scripts/
 │   ├── schema.sql              # full database schema

@@ -165,7 +165,7 @@ a bit of getting used to.
 ## Part 4 — The project, folder by folder
 
 ```
-WorkoutApp2/
+RilesmanFitness/
 ├── package.json            ← dependencies + scripts (npm run dev, etc.)
 ├── tsconfig.json           ← TypeScript compiler settings (strict mode on)
 ├── next.config.ts          ← framework config (allowed image hosts, etc.)
