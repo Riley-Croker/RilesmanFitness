@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS rilesman_fitness.workouts (
   name       VARCHAR(255) NOT NULL,
   date       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   notes      TEXT,
+  -- Set only for workouts timed live with Start/Finish, NULL for workouts
+  -- logged afterwards. Duration = finished_at - started_at.
+  started_at DATETIME NULL,
+  finished_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES rilesman_fitness.users(id) ON DELETE CASCADE,

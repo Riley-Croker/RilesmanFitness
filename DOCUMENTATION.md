@@ -160,29 +160,182 @@ no network calls:
   that calls our `/api/exercises` route (debounced as you type), which
   reads from the same local catalogue.
 
+#### Renaming an exercise
+
+Use this when ExerciseDB's name isn't what you call it, e.g. its
+"cable standing rear delt row (with rope)" is our "face pull". (To log
+something that isn't in the list at all, you don't need any of this: type
+it into "Or type a custom exercise name…" at the bottom of the picker.)
+
+**Why it takes more than editing one file:**
+
+- `src/data/exercisedb.json` is *generated*. `npm run data:exercises`
+  rebuilds it from ExerciseDB, so a name typed straight into it gets
+  silently undone by the next refresh. Renames live in the download script
+  instead, which re-applies them every time.
+- Personal records and progress charts group logged sets by **name**. If
+  you've already logged the exercise, the rows in your database still carry
+  the old name, and old and new sets would split into two separate
+  exercises. Those rows need updating too (step 6).
+
+**Steps**
+
+1. **Find the exercise's ID.** Open it in the app. The ID is the last part
+   of the URL: `rcroker.dev/workout/exercises/ZfyAGhK` → `ZfyAGhK`.
+
+2. **Add one line to `NAME_OVERRIDES`** at the top of
+   [scripts/fetch-exercises.ts](scripts/fetch-exercises.ts):
+
+   ```ts
+   const NAME_OVERRIDES: Record<string, string> = {
+     ZfyAGhK: "face pull", // ExerciseDB: "cable standing rear delt row (with rope)"
+     AbC1234: "your new name", // ExerciseDB: "<its original name>"
+   };
+   ```
+
+   - **Lowercase.** The app capitalises for display.
+   - **Unique.** If another exercise already has that name, the script
+     stops with an error naming it, because keeping both would silently drop
+     one. Pick a different name.
+   - Keep the comment with the original name. It's the only record of what
+     ExerciseDB calls it.
+
+3. 💻 **Rebuild the saved list.** Takes a few minutes (the free API is rate
+   limited):
+
+   ```powershell
+   cd C:\Users\rcrok\Desktop\Dev\RilesmanFitness; npm run data:exercises
+   ```
+
+   A refresh also picks up anything ExerciseDB changed since last time, so
+   the diff may include more than your rename. Glance at the exercise count
+   the script prints; a big drop is worth a question before committing.
+
+4. 💻 **Check it locally.** Run the app and search the new name at
+   http://localhost:3000/workout/exercises.
+
+5. 💻 **Check, commit, push, deploy** as usual (see `CLAUDE.md`):
+
+   ```powershell
+   cd C:\Users\rcrok\Desktop\Dev\RilesmanFitness; npm run lint; npx tsc --noEmit; npm run build
+   ```
+   ```powershell
+   cd C:\Users\rcrok\Desktop\Dev\RilesmanFitness; git add -A; git commit -m "Rename <old> to <new>"; git push
+   ```
+   🖥️ Then the usual `git pull` / `docker compose build workout` / `up -d workout`
+   on the droplet.
+
+6. **Only if you've already logged it:** rename the stored rows so your
+   history stays in one piece.
+
+   🖥️ Back up first:
+   ```bash
+   cd /opt/rcroker && ./backup-db.sh
+   ```
+   Then in HeidiSQL, connected to production as `editor` (SSH tunnel setup is
+   in `rcroker-infra/README.md`), run against `rilesman_fitness`:
+
+   ```sql
+   UPDATE workout_exercises  SET name = 'your new name' WHERE exercise_id = 'AbC1234';
+   UPDATE template_exercises SET name = 'your new name' WHERE exercise_id = 'AbC1234';
+
+   -- Check: should return exactly one row, with the new name.
+   SELECT name, COUNT(*) FROM workout_exercises WHERE exercise_id = 'AbC1234' GROUP BY name;
+   ```
+
+   Matching on `exercise_id` rather than the old name means the update can
+   only touch that one exercise.
+
+**To undo a rename:** delete its line, rerun step 3, deploy, and run step 6
+with ExerciseDB's original name (from the comment).
+
 ### 4.4 Logging a workout
 
 `/workouts/new` renders the client-side logger
-([src/components/workout-logger.tsx](src/components/workout-logger.tsx)):
+([src/components/workout-logger.tsx](src/components/workout-logger.tsx)).
+There are two ways to use it:
 
-1. Name the session, pick the date, optionally add notes.
+- **Live:** press **▶ Start** when you begin. A timer pins below the nav
+  with **Finish** and **Discard**. The workout's date becomes the moment you
+  started, and the start and finish times are saved with it.
+- **After the fact:** skip Start, pick the date, and **Save Workout**. No
+  times are recorded; the summary just shows no duration.
+
+Then:
+
+1. Name the session (optional for a live workout: an unnamed one is saved
+   as e.g. "Tuesday Workout") and optionally add notes.
 2. **+ Add exercise** opens the picker (search the catalogue, filter by body
    part, or type a custom exercise name for anything not in the catalogue).
 3. Each exercise gets a set table — reps and weight per set in your
    preferred unit (lbs by default); leave weight blank/0 for bodyweight
    movements.
-4. **Finish & Save Workout** POSTs the whole structure to `/api/workouts`,
-   which writes one `workouts` row, one `workout_exercises` row per
-   exercise, and one `sets` row per set, then redirects to the workout's
-   detail page.
+4. **Finish** / **Save Workout** POSTs the whole structure to
+   `/api/workouts`, which writes one `workouts` row, one `workout_exercises`
+   row per exercise, and one `sets` row per set, then opens the workout's
+   summary (4.5).
 5. **Save as template** instead stores the exercise list (with set/rep
    targets taken from what you entered) as a reusable routine.
 
+**The timer** stores the moment Start was pressed and shows `now − start`
+every second. It is never a running counter, so it stays correct when a
+phone sleeps between sets and pauses the page.
+
+**The workout in progress survives reloads.** Every change is saved to the
+browser's localStorage ([src/lib/workout-draft.ts](src/lib/workout-draft.ts)),
+per user. If the tab reloads, closes, or the phone discards it, reopening
+Log Workout resumes it, timer included, with a "Picked up where you left
+off" note. Saving or discarding clears it. A logger you only opened and
+didn't touch saves nothing, so looking at a template doesn't leave a
+workout "in progress". Because localStorage exists only in the browser, the
+logger is rendered browser-only
+([workout-logger-loader.tsx](src/components/workout-logger-loader.tsx)) to
+avoid a hydration mismatch between the server's HTML and the restored
+workout.
+
+The server accepts the start/finish times only if both are valid, finish
+isn't before start, and the workout lasted under 24 hours; otherwise it
+saves the workout without times rather than rejecting it.
+
 Pre-seeding: `/workouts/new?exercise=<id>` starts with that exercise loaded
 (used by the "Log this exercise" button), and `/workouts/new?template=<id>`
-loads a full template (used by "Start workout" on the Templates page).
+loads a full template (used by "Start workout" on the Templates page). A
+workout already in progress takes priority over either.
 
-### 4.5 Stats features
+### 4.5 Workout summary
+
+`/workouts/[id]/summary`
+([src/app/workouts/[id]/summary/page.tsx](src/app/workouts/[id]/summary/page.tsx))
+opens after every save, and from **View summary** on any workout's detail
+page. One phone-sized card holds:
+
+- **Totals:** duration (live workouts; otherwise the exercise count), sets,
+  and volume.
+- **Every exercise** with its set count and **best set**: heaviest weight,
+  more reps breaking a tie (the Records page's rule). Bodyweight-only
+  exercises show their most reps.
+- **PR badge** when a best set beats every set of that exercise logged
+  *before* this workout (an earlier date, or the same date saved earlier).
+  Like the Records page it counts weighted sets only, and a first attempt is
+  never a PR. `getPreviousBests` in [queries.ts](src/lib/queries.ts) uses the
+  same ranking as `getPersonalRecords`, so the two can't disagree.
+- **Muscles worked:** a front/back body map shaded lime by effort, plus the
+  top five muscle groups with bars. [src/lib/muscles.ts](src/lib/muscles.ts)
+  scores each set as 1 for the exercise's target muscles and 0.5 for its
+  secondaries (looked up in the catalogue; custom exercises fall back to
+  their one stored target muscle), and maps ExerciseDB's anatomical names
+  onto body-map regions. The outlines are adapted from the MIT-licensed
+  react-body-highlighter ([body-map-data.ts](src/components/body-map-data.ts)
+  carries the attribution).
+
+**Save image** ([save-image-button.tsx](src/components/save-image-button.tsx))
+renders the card to a PNG at 2× with `modern-screenshot`. On phones it opens
+the share sheet (iPhone: "Save Image" puts it in Photos); on computers it
+downloads. The card has no exercise GIFs on purpose: ExerciseDB's server
+doesn't allow other sites to export its images, and one such image would
+block the whole export. The card also screenshots cleanly as-is.
+
+### 4.6 Stats features
 
 All computed with SQL in [src/lib/queries.ts](src/lib/queries.ts):
 
@@ -207,7 +360,8 @@ Database: `rilesman_fitness` (created by `npm run db:init` from
 ```
 users                 — id, name, email (unique), password_hash,
                         weight_unit ('lbs' default | 'kg')
-workouts              — id, user_id → users, name, date, notes
+workouts              — id, user_id → users, name, date, notes,
+                        started_at, finished_at (both NULL unless timed live)
 workout_exercises     — id, workout_id → workouts, exercise_id (catalogue id,
                         nullable for custom), name, body_part, equipment,
                         target_muscle, sort_order
@@ -232,7 +386,7 @@ ever touch the signed-in user's rows.
 | Method & path | Purpose |
 |---|---|
 | `GET /api/workouts` | List your workouts (summaries with counts + volume) |
-| `POST /api/workouts` | Create a workout `{name, date, notes, exercises:[{exerciseId, name, ..., sets:[{reps, weight}]}]}` |
+| `POST /api/workouts` | Create a workout `{name, date, notes, startedAt?, finishedAt?, exercises:[{exerciseId, name, ..., sets:[{reps, weight}]}]}`. The ISO start/finish times are sent only for live workouts; when kept, `startedAt` becomes the workout's date |
 | `GET /api/workouts/[id]` | Full workout with exercises and sets |
 | `DELETE /api/workouts/[id]` | Delete a workout |
 | `GET /api/templates` | List your templates |
@@ -254,7 +408,7 @@ RilesmanFitness/
 │   ├── schema.sql              # full database schema
 │   ├── init-db.ts              # creates the DB from schema.sql (npm run db:init)
 │   ├── fetch-exercises.ts      # downloads + cleans the ExerciseDB catalogue (npm run data:exercises)
-│   └── migrations/             # one-off SQL data migrations, run by hand
+│   └── migrations/             # one-off SQL migrations, run by hand on the server
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx          # root layout: fonts, nav, session fetch
@@ -262,7 +416,7 @@ RilesmanFitness/
 │   │   ├── login/ register/    # auth forms
 │   │   ├── dashboard/          # stats cards, recent workouts, top PRs
 │   │   ├── exercises/          # library browser + [id] detail page
-│   │   ├── workouts/           # history list, new/ logger, [id] detail
+│   │   ├── workouts/           # history list, new/ logger, [id] detail, [id]/summary
 │   │   ├── templates/          # saved routines
 │   │   ├── progress/           # charts
 │   │   ├── calendar/           # month grid
@@ -273,7 +427,11 @@ RilesmanFitness/
 │   │   ├── exercise-card.tsx   # library grid card
 │   │   ├── exercise-image.tsx  # exercise GIF, with 🏋️ fallback
 │   │   ├── exercise-picker.tsx # search modal used by the logger
-│   │   ├── workout-logger.tsx  # the interactive logging form
+│   │   ├── workout-logger.tsx  # the interactive logging form, with the live timer
+│   │   ├── workout-logger-loader.tsx # renders the logger browser-only (localStorage draft)
+│   │   ├── body-map.tsx        # front/back muscle map on the summary
+│   │   ├── body-map-data.ts    # its polygon outlines (MIT, see file header)
+│   │   ├── save-image-button.tsx # summary card → PNG → share sheet / download
 │   │   ├── progress-charts.tsx # recharts line/bar charts
 │   │   └── delete-button.tsx   # confirm-then-delete
 │   ├── data/
@@ -283,7 +441,12 @@ RilesmanFitness/
 │   │   ├── auth.ts             # NextAuth credentials config
 │   │   ├── actions.ts          # login/register/logout server actions
 │   │   ├── queries.ts          # every SQL query used by pages and APIs
-│   │   └── exercise-library.ts # local catalogue: browse/filter/search
+│   │   ├── exercise-library.ts # local catalogue: browse/filter/search
+│   │   ├── muscles.ts          # "muscles worked" scoring for the summary
+│   │   ├── workout-draft.ts    # saves the workout in progress to localStorage
+│   │   ├── duration.ts         # timer clock / summary duration formatting
+│   │   ├── units.ts            # lbs ↔ kg conversion (storage is always lbs)
+│   │   └── base-path.ts        # the /workout prefix and withBasePath()
 │   └── types/
 │       ├── index.ts            # shared TypeScript types
 │       └── next-auth.d.ts      # adds user.id to the session type
@@ -306,6 +469,14 @@ RilesmanFitness/
   0 displays as "Bodyweight".
 - **Server-rendered filters on /exercises** — search state lives in the
   URL, which plays nicely with the back button and needs no client state.
+- **The server runs in the user's time zone** — pages format dates and times
+  on the server, in the server's zone, and mysql2 reads and writes
+  `DATETIME` columns in it too. The production container sets
+  `TZ: America/New_York` (in `rcroker-infra/docker-compose.yml`); without
+  it, the image's UTC default would show an 11:43 PM workout as 3:43 AM the
+  next day, on the wrong calendar day. Local dev simply uses the PC's zone.
+  Untimed workouts are stored at noon, so they can't cross a day boundary
+  whichever zone reads them.
 
 ## 9. History: ExerciseDB → free-exercise-db → ExerciseDB
 

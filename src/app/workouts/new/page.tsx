@@ -1,11 +1,12 @@
 // Log a new workout. Server component that handles pre-seeding:
 //   ?template=<id>  — start from a saved template
 //   ?exercise=<id>  — start with one ExerciseDB exercise loaded
-// then hands off to the client-side <WorkoutLogger>.
+// then hands off to the client-side <WorkoutLogger>. If a workout is
+// already in progress on this device, the logger resumes that instead.
 
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import WorkoutLogger from "@/components/workout-logger";
+import WorkoutLogger from "@/components/workout-logger-loader";
 import { getExercise } from "@/lib/exercise-library";
 import { getTemplate, getWeightUnit } from "@/lib/queries";
 
@@ -73,6 +74,7 @@ export default async function NewWorkoutPage({
     <div>
       <h1 className="mb-6 text-center text-3xl font-bold tracking-tight">Log Workout</h1>
       <WorkoutLogger
+        userId={session.user.id}
         initialName={initialName}
         initialExercises={initialExercises}
         weightUnit={unit}

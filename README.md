@@ -24,7 +24,10 @@ Requires Node.js and a MySQL/MariaDB server on localhost:3306
 ## Features
 
 - Email/password accounts (bcrypt-hashed, stored in your local database)
-- Workout logger with an animated-thumbnail exercise picker
+- Workout logger with an animated-thumbnail exercise picker, a live
+  Start/Finish timer, and a workout in progress that survives reloads
+- Post-workout summary: time, best set per exercise with PR badges, and a
+  muscles-worked body map, saveable as an image for your phone's photos
 - Exercise library: fuzzy search + filters by body part, equipment, muscle;
   detail pages with GIFs and step-by-step instructions
 - Workout templates ("Push Day" → start with one click)

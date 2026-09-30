@@ -44,6 +44,10 @@ export interface WorkoutInput {
   name: string;
   date: string; // ISO date
   notes?: string;
+  // ISO timestamps, sent only when the workout was timed live with
+  // Start/Finish. The server uses startedAt as the workout's date.
+  startedAt?: string;
+  finishedAt?: string;
   exercises: WorkoutExerciseInput[];
 }
 
@@ -68,6 +72,8 @@ export interface Workout {
   name: string;
   date: string;
   notes: string | null;
+  startedAt: string | null; // ISO; null unless timed live
+  finishedAt: string | null;
   exercises: WorkoutExercise[];
 }
 

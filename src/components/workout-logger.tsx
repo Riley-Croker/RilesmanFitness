@@ -5,42 +5,122 @@
 // /api/workouts. Can be pre-seeded from a template or a single exercise
 // (?template=<id> / ?exercise=<id> handled by the page and passed in).
 // "Save as template" stores the exercise list as a reusable routine.
+//
+// Two ways to use it:
+//   - Live: press Start, and a timer runs until Finish. The start and finish
+//     times are saved with the workout and shown on its summary.
+//   - After the fact: skip Start, pick a date, and save - no times recorded.
+//
+// The workout in progress is kept in localStorage (src/lib/workout-draft.ts)
+// so a reload or a discarded tab resumes it, timer included. That's also why
+// this component is rendered browser-only (workout-logger-loader.tsx).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ExerciseImage from "@/components/exercise-image";
 import ExercisePicker from "@/components/exercise-picker";
 import { withBasePath } from "@/lib/base-path";
-import { toStoredLbs, type WeightUnit } from "@/lib/units";
-import type { Exercise, WorkoutExerciseInput } from "@/types";
+import { formatClock } from "@/lib/duration";
+import { toDisplayWeight, toStoredLbs, type WeightUnit } from "@/lib/units";
+import { clearDraft, loadDraft, saveDraft, type DraftExercise, type WorkoutDraft } from "@/lib/workout-draft";
+import type { Exercise } from "@/types";
 
-interface LoggerExercise extends WorkoutExerciseInput {
-  images?: string[];
-}
+type LoggerExercise = DraftExercise;
 
 function today() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// A draft typed in the other unit (the lbs/kg toggle was flipped since) gets
+// its weights converted, so 60 kg never turns into 60 lbs.
+function restore(userId: string, unit: WeightUnit): WorkoutDraft | null {
+  const draft = loadDraft(userId);
+  if (!draft || draft.unit === unit) return draft;
+  return {
+    ...draft,
+    unit,
+    exercises: draft.exercises.map((ex) => ({
+      ...ex,
+      sets: ex.sets.map((s) => ({ ...s, weight: toDisplayWeight(toStoredLbs(s.weight || 0, draft.unit), unit) })),
+    })),
+  };
+}
+
 export default function WorkoutLogger({
+  userId,
   initialName = "",
   initialExercises = [],
   weightUnit = "lbs",
 }: {
+  userId: string;
   initialName?: string;
   initialExercises?: LoggerExercise[];
   weightUnit?: WeightUnit;
 }) {
   const router = useRouter();
-  const [name, setName] = useState(initialName);
-  const [date, setDate] = useState(today());
-  const [notes, setNotes] = useState("");
-  const [exercises, setExercises] = useState<LoggerExercise[]>(initialExercises);
+
+  // Read the saved draft once, on first render. A lazy initializer (a
+  // function passed to useState) runs only then, not on every re-render.
+  const [restored] = useState(() => restore(userId, weightUnit));
+
+  const [name, setName] = useState(restored?.name ?? initialName);
+  const [date, setDate] = useState(restored?.date ?? today());
+  const [notes, setNotes] = useState(restored?.notes ?? "");
+  const [exercises, setExercises] = useState<LoggerExercise[]>(restored?.exercises ?? initialExercises);
+  const [startedAt, setStartedAt] = useState<number | null>(restored?.startedAt ?? null);
+  const [now, setNow] = useState(() => Date.now());
+  const [showRestored, setShowRestored] = useState(restored !== null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templateSaved, setTemplateSaved] = useState(false);
+
+  // Set once the workout is saved or discarded, so the persistence effect
+  // below can't write it back to storage on the way out.
+  const done = useRef(false);
+
+  // Persist on every change. A fresh logger that hasn't been touched keeps no
+  // draft, so opening a template to look at it doesn't leave a workout
+  // "in progress" behind; comparing against the first render's snapshot
+  // (rather than counting renders) also holds under React's dev-mode double
+  // effects.
+  const snapshot = JSON.stringify({ name, date, notes, exercises, startedAt });
+  const firstSnapshot = useRef(snapshot);
+  useEffect(() => {
+    if (done.current) return;
+    if (!restored && snapshot === firstSnapshot.current) {
+      clearDraft(userId);
+      return;
+    }
+    saveDraft(userId, { name, date, notes, exercises, startedAt, unit: weightUnit });
+  }, [snapshot, restored, userId, name, date, notes, exercises, startedAt, weightUnit]);
+
+  // Tick once a second while the workout is running. The elapsed time is
+  // always now - startedAt, never a counter, so it stays right even after
+  // the phone sleeps and the interval pauses.
+  useEffect(() => {
+    if (startedAt === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+
+  const timed = startedAt !== null;
+
+  const start = () => {
+    const t = Date.now();
+    setStartedAt(t);
+    setNow(t);
+    setDate(today());
+  };
+
+  const discard = () => {
+    if (!window.confirm("Discard this workout? Everything logged in it will be lost.")) return;
+    done.current = true;
+    clearDraft(userId);
+    // A full reload gives a clean logger with nothing left in memory.
+    window.location.assign(withBasePath("/workouts/new"));
+  };
 
   const addExercise = (ex: Exercise) => {
     setExercises((prev) => [
@@ -88,7 +168,14 @@ export default function WorkoutLogger({
 
   const save = async () => {
     setError(null);
-    if (!name.trim()) return setError("Give your workout a name.");
+    // Nobody wants to be blocked by a name field at the end of a session:
+    // an unnamed live workout is named after its day.
+    const finalName =
+      name.trim() ||
+      (startedAt !== null
+        ? `${new Date(startedAt).toLocaleDateString("en-US", { weekday: "long" })} Workout`
+        : "");
+    if (!finalName) return setError("Give your workout a name.");
     if (exercises.length === 0) return setError("Add at least one exercise.");
     setSaving(true);
     try {
@@ -100,14 +187,25 @@ export default function WorkoutLogger({
       const res = await fetch(withBasePath("/api/workouts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, date, notes, exercises: payload }),
+        body: JSON.stringify({
+          name: finalName,
+          date,
+          notes,
+          exercises: payload,
+          ...(startedAt !== null && {
+            startedAt: new Date(startedAt).toISOString(),
+            finishedAt: new Date().toISOString(),
+          }),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error ?? "Failed to save workout.");
       }
       const { id } = await res.json();
-      router.push(`/workouts/${id}`);
+      done.current = true;
+      clearDraft(userId);
+      router.push(`/workouts/${id}/summary`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save workout.");
       setSaving(false);
@@ -147,6 +245,66 @@ export default function WorkoutLogger({
 
   return (
     <div className="mx-auto max-w-3xl">
+      {/* Timer: a Start prompt before, a pinned running clock after */}
+      {timed ? (
+        <div className="sticky top-14 z-30 -mx-4 mb-5 border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lime-400 opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-lime-400" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-2xl font-bold tabular-nums leading-none" role="timer" aria-live="off">
+                {formatClock(now - startedAt)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-400">
+                Started{" "}
+                {new Date(startedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              </p>
+            </div>
+            <button onClick={discard} className="px-2 text-sm text-zinc-500 hover:text-red-400">
+              Discard
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-lg bg-lime-400 px-5 py-2.5 font-semibold text-zinc-950 transition-colors hover:bg-lime-300 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Finish"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-5 flex items-center gap-4 rounded-xl border border-lime-400/30 bg-lime-400/5 p-4">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Ready to train?</p>
+            <p className="mt-0.5 text-sm text-zinc-400">
+              Start the timer when you begin. Logging a past workout? Skip this and just fill it in.
+            </p>
+          </div>
+          <button
+            onClick={start}
+            className="shrink-0 rounded-lg bg-lime-400 px-5 py-2.5 font-semibold text-zinc-950 transition-colors hover:bg-lime-300"
+          >
+            ▶ Start
+          </button>
+        </div>
+      )}
+
+      {showRestored && (
+        <div className="mb-5 flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm">
+          <p className="min-w-0 flex-1 text-zinc-300">Picked up where you left off.</p>
+          {!timed && (
+            <button onClick={discard} className="text-zinc-500 hover:text-red-400">
+              Discard
+            </button>
+          )}
+          <button onClick={() => setShowRestored(false)} className="text-zinc-500 hover:text-zinc-200" aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Workout meta */}
       <div className="flex flex-wrap gap-3">
         <input
@@ -155,12 +313,15 @@ export default function WorkoutLogger({
           placeholder="Workout name — e.g. Push Day"
           className={`${inputClass} min-w-60 flex-1 text-base font-semibold`}
         />
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className={inputClass}
-        />
+        {/* A live workout's date is the day it started. */}
+        {!timed && (
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className={inputClass}
+          />
+        )}
       </div>
       <textarea
         value={notes}
@@ -250,7 +411,7 @@ export default function WorkoutLogger({
           disabled={saving}
           className="flex-1 rounded-lg bg-lime-400 py-3 font-semibold text-zinc-950 transition-colors hover:bg-lime-300 disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Finish & Save Workout"}
+          {saving ? "Saving…" : timed ? "Finish Workout" : "Save Workout"}
         </button>
         <button
           onClick={saveAsTemplate}

@@ -46,7 +46,7 @@ export async function getWorkoutSummaries(userId: string, limit?: number): Promi
 
 export async function getWorkoutDetail(userId: string, workoutId: string): Promise<Workout | null> {
   const [wRows] = await db.execute(
-    "SELECT id, name, date, notes FROM workouts WHERE id = ? AND user_id = ?",
+    "SELECT id, name, date, notes, started_at, finished_at FROM workouts WHERE id = ? AND user_id = ?",
     [workoutId, userId]
   );
   const workout = (wRows as any[])[0];
@@ -89,8 +89,38 @@ export async function getWorkoutDetail(userId: string, workoutId: string): Promi
     name: workout.name,
     date: new Date(workout.date).toISOString(),
     notes: workout.notes,
+    startedAt: workout.started_at ? new Date(workout.started_at).toISOString() : null,
+    finishedAt: workout.finished_at ? new Date(workout.finished_at).toISOString() : null,
     exercises: [...exercises.values()],
   };
+}
+
+// The best weighted set per exercise from every workout logged BEFORE the
+// given one, keyed by exercise name - what the summary compares against to
+// award a PR badge. "Best" and "weighted only" follow getPersonalRecords
+// exactly, so the badge and the Records page never disagree. "Before" means
+// an earlier date, or the same date but saved earlier.
+export async function getPreviousBests(
+  userId: string,
+  workoutId: string
+): Promise<Map<string, { weight: number; reps: number }>> {
+  const [rows] = await db.execute(
+    `SELECT name, weight, reps FROM (
+       SELECT we.name, s.weight, s.reps,
+              ROW_NUMBER() OVER (PARTITION BY we.name ORDER BY s.weight DESC, s.reps DESC) AS rn
+       FROM workouts cur
+       JOIN workouts w ON w.user_id = cur.user_id AND w.id <> cur.id
+                      AND (w.date < cur.date OR (w.date = cur.date AND w.created_at < cur.created_at))
+       JOIN workout_exercises we ON we.workout_id = w.id
+       JOIN sets s ON s.workout_exercise_id = we.id
+       WHERE cur.id = ? AND cur.user_id = ? AND s.weight > 0
+     ) ranked
+     WHERE rn = 1`,
+    [workoutId, userId]
+  );
+  return new Map(
+    (rows as any[]).map((r) => [r.name, { weight: Number(r.weight), reps: Number(r.reps) }])
+  );
 }
 
 export async function getTemplates(userId: string): Promise<Template[]> {

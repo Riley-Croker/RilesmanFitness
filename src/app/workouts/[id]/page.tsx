@@ -49,7 +49,15 @@ export default async function WorkoutDetailPage({
             {Math.round(toDisplayWeight(totalVolume, unit)).toLocaleString()} {unit} total volume
           </p>
         </div>
-        <DeleteButton url={`/api/workouts/${workout.id}`} redirectTo="/workouts" />
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/workouts/${workout.id}/summary`}
+            className="rounded-lg bg-lime-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-lime-300"
+          >
+            View summary
+          </Link>
+          <DeleteButton url={`/api/workouts/${workout.id}`} redirectTo="/workouts" />
+        </div>
       </div>
 
       {workout.notes && (

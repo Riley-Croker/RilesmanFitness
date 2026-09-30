@@ -120,9 +120,24 @@ async function main() {
   const unique = [...new Map(raw.map((e) => [e.exerciseId, e])).values()];
   const working = await checkGifs(unique);
 
+  const cleaned = unique.map(clean).filter((e) => working.has(e.exerciseId));
+
+  // Names are unique in the saved list (de-duplication keys on them), so an
+  // override that reuses another exercise's name would silently drop one.
+  for (const [id, name] of Object.entries(NAME_OVERRIDES)) {
+    const clash = cleaned.find((e) => e.name === name && e.exerciseId !== id);
+    if (clash) {
+      throw new Error(
+        `NAME_OVERRIDES: "${name}" (${id}) is already the name of ${clash.exerciseId}. Pick a different name.`
+      );
+    }
+    if (!cleaned.some((e) => e.exerciseId === id)) {
+      console.warn(`\nNAME_OVERRIDES: ${id} ("${name}") wasn't in this download (removed, or its GIF is broken). Skipped.`);
+    }
+  }
+
   const byName = new Map<string, RawExercise>();
-  for (const e of unique.map(clean)) {
-    if (!working.has(e.exerciseId)) continue;
+  for (const e of cleaned) {
     if (!byName.has(e.name)) byName.set(e.name, e);
   }
   const list = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));

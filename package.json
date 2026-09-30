@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "modern-screenshot": "^4.7.0",
     "mysql2": "^3.17.1",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",

@@ -44,15 +44,40 @@ export async function POST(request: NextRequest) {
   }
 
   const workoutId = crypto.randomUUID();
+
+  // Workouts timed live with Start/Finish send both timestamps. Keep them only
+  // if they make sense: both valid, finish not before start, and under a day
+  // (longer means Finish was forgotten). Bad times are dropped rather than
+  // rejected - losing the timer beats losing the workout.
+  const startedAt = body.startedAt ? new Date(body.startedAt) : null;
+  const finishedAt = body.finishedAt ? new Date(body.finishedAt) : null;
+  const timed =
+    startedAt !== null &&
+    finishedAt !== null &&
+    !isNaN(startedAt.getTime()) &&
+    !isNaN(finishedAt.getTime()) &&
+    finishedAt >= startedAt &&
+    finishedAt.getTime() - startedAt.getTime() <= 24 * 60 * 60 * 1000;
+
   // A bare YYYY-MM-DD would be parsed as UTC midnight and can land on the
   // previous local day — pin date-only values to local noon instead.
-  const date = body.date
-    ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(body.date) ? `${body.date}T12:00:00` : body.date)
-    : new Date();
+  const date = timed
+    ? startedAt
+    : body.date
+      ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(body.date) ? `${body.date}T12:00:00` : body.date)
+      : new Date();
 
   await db.execute(
-    "INSERT INTO workouts (id, user_id, name, date, notes) VALUES (?, ?, ?, ?, ?)",
-    [workoutId, session.user.id, body.name.trim(), date, body.notes?.trim() || null]
+    "INSERT INTO workouts (id, user_id, name, date, notes, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [
+      workoutId,
+      session.user.id,
+      body.name.trim(),
+      date,
+      body.notes?.trim() || null,
+      timed ? startedAt : null,
+      timed ? finishedAt : null,
+    ]
   );
 
   for (let i = 0; i < body.exercises.length; i++) {
