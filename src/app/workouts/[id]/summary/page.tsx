@@ -144,43 +144,55 @@ export default async function WorkoutSummaryPage({
           </p>
         )}
 
-        {/* Exercises: name, sets, best set */}
-        <div className="mt-5">
-          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 border-b border-zinc-800 pb-1.5 text-[11px] uppercase tracking-wider text-zinc-500">
-            <span>Exercise</span>
-            <span className="text-right">Sets</span>
-            <span className="text-right">Best set</span>
-          </div>
-          {rows.map(({ ex, best, isPR }) => (
-            <div
-              key={ex.id}
-              className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 border-b border-zinc-900 py-2 text-sm"
-            >
-              <span className="truncate font-medium capitalize">{ex.name}</span>
-              <span className="text-right tabular-nums text-zinc-400">{ex.sets.length}</span>
-              <span className="text-right tabular-nums">
-                {isPR && (
-                  <span className="mr-1.5 rounded bg-lime-400 px-1 py-px text-[10px] font-bold text-zinc-950">
-                    PR
-                  </span>
-                )}
-                {!best ? (
-                  <span className="text-zinc-600">—</span>
-                ) : best.weight > 0 ? (
-                  <>
-                    <span className="font-semibold">{toDisplayWeight(best.weight, unit)}</span>
-                    <span className="text-zinc-400"> {unit} × {best.reps}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold">{best.reps}</span>
-                    <span className="text-zinc-400"> reps</span>
-                  </>
-                )}
-              </span>
-            </div>
-          ))}
-        </div>
+        {/* Exercises: name, sets, best set.
+            A real <table>, not a grid per row: a table sizes each column to
+            its widest cell across ALL rows, so the Sets numbers and the ×
+            of every best set line up no matter how long a name or weight is.
+            The best set is split into two cells (weight | × reps) for that
+            reason, and the unit lives in the header to leave names room. */}
+        <table className="mt-5 w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-500">
+              <th className="pb-1.5 text-left font-normal">Exercise</th>
+              <th className="pb-1.5 pl-3 text-right font-normal">Sets</th>
+              <th colSpan={2} className="pb-1.5 pl-3 text-right font-normal">
+                Best ({unit})
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ ex, best, isPR }) => (
+              <tr key={ex.id} className="border-b border-zinc-900">
+                {/* w-full: this column takes whatever the others leave.
+                    Names wrap up to three lines before being cut off. On a
+                    phone, 2 lines cut off 59-79 of the 1,285 catalogue names
+                    (anything 43+ chars); 3 lines cut off only the 1-3 longest.
+                    Short names stay one line, so rows only grow when needed. */}
+                <td className="w-full py-1.5">
+                  <span className="line-clamp-3 font-medium capitalize leading-snug">{ex.name}</span>
+                </td>
+                <td className="py-1.5 pl-3 text-right tabular-nums text-zinc-400">{ex.sets.length}</td>
+                <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums">
+                  {isPR && (
+                    <span className="mr-1.5 rounded bg-lime-400 px-1 py-px text-[10px] font-bold text-zinc-950">
+                      PR
+                    </span>
+                  )}
+                  {!best ? (
+                    <span className="text-zinc-600">—</span>
+                  ) : (
+                    <span className="font-semibold">
+                      {best.weight > 0 ? toDisplayWeight(best.weight, unit) : "BW"}
+                    </span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap py-1.5 pl-1 text-left tabular-nums text-zinc-400">
+                  {best && `× ${best.reps}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {/* Muscles worked */}
         {topGroups.length > 0 && (

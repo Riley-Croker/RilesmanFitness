@@ -313,7 +313,12 @@ page. One phone-sized card holds:
   and volume.
 - **Every exercise** with its set count and **best set**: heaviest weight,
   more reps breaking a tie (the Records page's rule). Bodyweight-only
-  exercises show their most reps.
+  exercises show their most reps as `BW × 25`. It's a real `<table>`, so
+  the Sets numbers and the × of every best set line up whatever the name or
+  weight length, with the unit in the column header. Names wrap to at most
+  three lines, which cuts off only the 1–3 longest of the 1,285 catalogue
+  names on a phone. A long workout won't fit one screen; Save image still
+  captures the whole card as a single tall picture.
 - **PR badge** when a best set beats every set of that exercise logged
   *before* this workout (an earlier date, or the same date saved earlier).
   Like the Records page it counts weighted sets only, and a first attempt is
