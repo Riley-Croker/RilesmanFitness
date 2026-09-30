@@ -1,75 +1,46 @@
-// Local exercise catalogue backed by the open-source free-exercise-db
-// dataset (https://github.com/yuhonas/free-exercise-db, public domain):
-// 873 exercises, each with two demonstration photos (start/end position),
-// instructions, muscles, equipment, and difficulty level.
+// Local exercise catalogue backed by ExerciseDB's free tier
+// (https://oss.exercisedb.dev): 1,285 exercises, each with an animated GIF,
+// instructions, target/secondary muscles, body parts and equipment.
 //
-// The JSON lives in src/data/exercises.json, so browsing and search work
-// entirely offline — only the photos load from a CDN (jsDelivr, backed by
-// the GitHub repo). This replaced the ExerciseDB API integration after
-// its GIF CDN went offline.
+// The JSON lives in src/data/exercisedb.json, so browsing and search never
+// call ExerciseDB — the free API is rate limited and not meant for runtime
+// use. Only the GIFs load from ExerciseDB's CDN, in the browser. To refresh
+// the data (it's already de-duplicated and GIF-checked): npm run data:exercises
+//
+// This is the third source. The app started on the ExerciseDB API, moved to
+// free-exercise-db (public-domain photos) when ExerciseDB's GIF CDN went
+// offline in July 2026, and came back here in Sep 2026 once the CDN
+// returned — for the animations and the wider catalogue.
 
-import rawData from "@/data/exercises.json";
+import rawData from "@/data/exercisedb.json";
 import type { Exercise, ExercisePage } from "@/types";
 
-const IMAGE_BASE = "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/";
-
-// free-exercise-db tags exercises with specific muscles; the app's
-// browse-by-body-part filter groups them into ExerciseDB-style regions.
-const MUSCLE_TO_BODY_PART: Record<string, string> = {
-  biceps: "upper arms",
-  triceps: "upper arms",
-  forearms: "lower arms",
-  quadriceps: "upper legs",
-  hamstrings: "upper legs",
-  abductors: "upper legs",
-  adductors: "upper legs",
-  glutes: "upper legs",
-  calves: "lower legs",
-  chest: "chest",
-  lats: "back",
-  "middle back": "back",
-  "lower back": "back",
-  traps: "back",
-  shoulders: "shoulders",
-  abdominals: "waist",
-  neck: "neck",
-};
-
 interface RawExercise {
-  id: string;
+  exerciseId: string;
   name: string;
-  force: string | null;
-  level: string;
-  mechanic: string | null;
-  equipment: string | null;
-  primaryMuscles: string[];
+  gifUrl: string;
+  bodyParts: string[];
+  equipments: string[];
+  targetMuscles: string[];
   secondaryMuscles: string[];
   instructions: string[];
-  category: string;
-  images: string[];
 }
 
-const EXERCISES: Exercise[] = (rawData as RawExercise[])
-  .map((raw) => ({
-    exerciseId: raw.id,
-    name: raw.name,
-    images: raw.images.map((img) => IMAGE_BASE + encodeURI(img)),
-    bodyParts: [...new Set(raw.primaryMuscles.map((m) => MUSCLE_TO_BODY_PART[m]).filter(Boolean))],
-    equipments: [raw.equipment ?? "body only"],
-    targetMuscles: raw.primaryMuscles,
-    secondaryMuscles: raw.secondaryMuscles,
-    instructions: raw.instructions,
-    level: raw.level,
-    category: raw.category,
-    force: raw.force,
-    mechanic: raw.mechanic,
-  }))
-  .sort((a, b) => a.name.localeCompare(b.name));
+const EXERCISES: Exercise[] = (rawData as RawExercise[]).map((raw) => ({
+  exerciseId: raw.exerciseId,
+  name: raw.name,
+  images: [raw.gifUrl],
+  bodyParts: raw.bodyParts,
+  equipments: raw.equipments,
+  targetMuscles: raw.targetMuscles,
+  secondaryMuscles: raw.secondaryMuscles,
+  instructions: raw.instructions,
+}));
 
 const BY_ID = new Map(EXERCISES.map((e) => [e.exerciseId, e]));
 
 export async function getBodyParts(): Promise<string[]> {
-  return [...new Set(Object.values(MUSCLE_TO_BODY_PART))].sort();
+  return [...new Set(EXERCISES.flatMap((e) => e.bodyParts))].sort();
 }
 
 export async function getEquipments(): Promise<string[]> {

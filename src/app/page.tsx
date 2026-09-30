@@ -13,7 +13,7 @@ export default async function Home() {
         Rilesman <span className="text-lime-400">Fitness</span>
       </h1>
       <p className="max-w-xl text-lg text-zinc-400">
-        Log your workouts, browse 870+ exercises with photo demonstrations,
+        Log your workouts, browse 1,200+ exercises with animated demonstrations,
         and watch your strength climb over time.
       </p>
       <div className="flex gap-3">

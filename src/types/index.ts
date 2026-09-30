@@ -1,11 +1,11 @@
 // Shared types used across the app.
 
-// ---- Exercise catalogue (free-exercise-db dataset) ----
+// ---- Exercise catalogue (ExerciseDB dataset, see src/lib/exercise-library.ts) ----
 
 export interface Exercise {
   exerciseId: string;
   name: string;
-  images: string[]; // demonstration photos (start + end position)
+  images: string[]; // demonstration media: one animated GIF per ExerciseDB exercise
   bodyParts: string[];
   equipments: string[];
   targetMuscles: string[];

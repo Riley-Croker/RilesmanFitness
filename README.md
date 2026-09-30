@@ -1,9 +1,9 @@
 # Rilesman Fitness
 
-Log workouts, browse 870+ exercises with photo demonstrations, and track
-your strength over time. Next.js + MySQL + the public-domain
-[free-exercise-db](https://github.com/yuhonas/free-exercise-db) catalogue
-(bundled locally).
+Log workouts, browse 1,200+ exercises with animated demonstrations, and
+track your strength over time. Next.js + MySQL + the
+[ExerciseDB](https://oss.exercisedb.dev) free-tier catalogue (saved
+locally; only the GIFs load from ExerciseDB).
 
 **Full documentation: [DOCUMENTATION.md](DOCUMENTATION.md)**
 **Learn how it all works: [learning/README.md](learning/README.md)** — a
@@ -24,7 +24,7 @@ Requires Node.js and a MySQL/MariaDB server on localhost:3306
 ## Features
 
 - Email/password accounts (bcrypt-hashed, stored in your local database)
-- Workout logger with a photo-thumbnail exercise picker
+- Workout logger with an animated-thumbnail exercise picker
 - Exercise library: fuzzy search + filters by body part, equipment, muscle;
   detail pages with GIFs and step-by-step instructions
 - Workout templates ("Push Day" → start with one click)

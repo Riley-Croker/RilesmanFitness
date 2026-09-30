@@ -43,7 +43,7 @@ export default async function ExercisesPage({
     <div>
       <h1 className="text-3xl font-bold tracking-tight">Exercise Library</h1>
       <p className="mt-1 text-zinc-400">
-        {page.total.toLocaleString()} exercises with photo demonstrations — search or filter to find your next movement.
+        {page.total.toLocaleString()} exercise{page.total === 1 ? "" : "s"} with animated demonstrations — search or filter to find your next movement.
       </p>
 
       {/* Filter form — plain GET so state lives in the URL */}

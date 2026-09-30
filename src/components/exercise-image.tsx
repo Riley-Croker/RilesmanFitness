@@ -1,8 +1,9 @@
 "use client";
 
-// Exercise demonstration photos. Each free-exercise-db exercise ships
-// two photos (start and end position); when both are present this
-// alternates between them to mimic an animated demo. Falls back to a
+// Exercise demonstration media. ExerciseDB exercises ship one animated GIF,
+// which the browser animates by itself. Given several still images instead
+// (the app used two-photo free-exercise-db data before Sep 2026), this
+// alternates between them to mimic an animation. Falls back to a
 // placeholder if there are no images or the CDN fails.
 
 import { useEffect, useState } from "react";

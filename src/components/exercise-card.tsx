@@ -14,7 +14,7 @@ export default function ExerciseCard({ exercise }: { exercise: Exercise }) {
         <ExerciseImage
           images={exercise.images}
           alt={exercise.name}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
         />
       </div>
       <div className="p-3">

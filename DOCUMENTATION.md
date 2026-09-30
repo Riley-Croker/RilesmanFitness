@@ -1,12 +1,11 @@
 # Rilesman Fitness — Full Documentation
 
 An interactive web application for logging workouts, browsing an exercise
-library of 873 movements with photo demonstrations, and tracking strength
-progress over time. Built by finishing the `WorkoutApp` skeleton. The
-exercise catalogue comes from the public-domain
-[free-exercise-db](https://github.com/yuhonas/free-exercise-db) dataset
-(originally the ExerciseDB API was used, but its image CDN went offline —
-see section 9).
+library of 1,285 movements with animated demonstrations, and tracking
+strength progress over time. Built by finishing the `WorkoutApp` skeleton.
+The exercise catalogue comes from the free tier of
+[ExerciseDB](https://oss.exercisedb.dev), saved into the project (see
+section 9 for why it left and came back).
 
 ---
 
@@ -22,7 +21,7 @@ changes:
 | Login | Google/GitHub OAuth (needed external setup) | Email + password, stored locally with bcrypt hashing |
 | Sessions | Database sessions (MySQL adapter) | Stateless JWT cookies — no session table |
 | Workout logging | Empty stub page | Full logger: pick exercises, add sets/reps/weight, notes, date |
-| Exercise info | None | Browser + detail pages with photo demos, instructions, muscles, difficulty |
+| Exercise info | None | Browser + detail pages with animated demos, instructions, muscles |
 | Search | None | Fuzzy search plus filters by body part, equipment, and target muscle |
 | Templates | None | Save any workout as a reusable routine, start workouts from it |
 | Progress | None | Line/bar charts per exercise (max weight, est. 1RM, volume) |
@@ -37,7 +36,7 @@ changes:
 - **NextAuth v5** (Credentials provider, JWT sessions) + **bcryptjs** for password hashing
 - **Tailwind CSS 4** for styling
 - **Recharts** for the progress charts
-- **free-exercise-db** (public domain, bundled locally) for the exercise catalogue; photos served from jsDelivr's CDN
+- **ExerciseDB free tier** for the exercise catalogue: data saved locally in `src/data/exercisedb.json`, GIFs served from ExerciseDB's CDN
 
 ## 3. Running the app
 
@@ -58,6 +57,7 @@ changes:
 cd C:\Users\rcrok\Desktop\Dev\RilesmanFitness
 npm install          # install dependencies
 npm run db:init      # create the rilesman_fitness database and tables
+npm run data:exercises  # optional: re-download the ExerciseDB catalogue (few minutes)
 ```
 
 ### Every time
@@ -86,28 +86,28 @@ Next.js server
   ├── src/app/api/**/route.ts  ← JSON API (auth-guarded)
   ├── src/lib/auth.ts          ← NextAuth login/session logic
   ├── src/lib/queries.ts       ← all SQL queries in one place
-  ├── src/lib/exercise-library.ts ← local exercise catalogue (873 exercises)
-  ├── src/data/exercises.json  ← the bundled free-exercise-db dataset
+  ├── src/lib/exercise-library.ts ← local exercise catalogue (1,285 exercises)
+  ├── src/data/exercisedb.json ← saved ExerciseDB catalogue
   └── src/lib/db.ts            ← MySQL connection pool
         │
         ▼
-   MySQL (your data)      (photos load from jsDelivr's CDN)
+   MySQL (your data)      (GIFs load from ExerciseDB's CDN)
 ```
 
 Two data sources are deliberately kept separate:
 
 - **Your training data** (accounts, workouts, sets, templates) lives in your
   local MySQL database. It never leaves your machine.
-- **The exercise catalogue** (names, photos, instructions, muscles,
-  difficulty) is the public-domain free-exercise-db dataset, bundled into
-  the project at `src/data/exercises.json`. Browsing, filtering, and search
-  all run locally with no external API; only the demonstration photos load
-  from jsDelivr (a CDN backed by the dataset's GitHub repo).
+- **The exercise catalogue** (names, GIFs, instructions, muscles) is
+  ExerciseDB's free tier, downloaded once and saved in the project at
+  `src/data/exercisedb.json`. Browsing, filtering, and search all run
+  locally with no API calls; only the animated GIFs load from ExerciseDB's
+  CDN, in the browser.
 
 When you log a workout, the exercise's name, body part, equipment, and
 target muscle are **copied into your database** alongside the catalogue id.
 That way your history is fully self-contained, while the id lets pages link
-back to the photos and instructions.
+back to the GIF and instructions.
 
 ### 4.2 Authentication flow
 
@@ -125,27 +125,35 @@ back to the photos and instructions.
 
 Passwords are never stored or logged in plain text.
 
-### 4.3 The exercise library (free-exercise-db)
+### 4.3 The exercise library (ExerciseDB)
 
 [src/lib/exercise-library.ts](src/lib/exercise-library.ts) loads
-[src/data/exercises.json](src/data/exercises.json) (873 exercises) and
+[src/data/exercisedb.json](src/data/exercisedb.json) (1,285 exercises) and
 provides browsing, filtering, fuzzy search, and pagination — all in-process,
 no network calls:
 
-- Each exercise has **two demonstration photos** (start and end position).
-  The [ExerciseImage](src/components/exercise-image.tsx) component
-  alternates between them every 1.2 s to mimic an animated demo.
-- The dataset tags exercises with specific muscles (quadriceps, lats,
-  traps…); a mapping table groups those into the body-part regions used by
-  the filter dropdown (upper legs, back, chest, …).
+- Each exercise has **one animated GIF** with the target muscles
+  highlighted. Free-tier GIFs are 180×180, so cards show them at about
+  natural size and the detail page caps them at ~2× to stay sharp.
+- **Refreshing the data:** `npm run data:exercises` runs
+  [scripts/fetch-exercises.ts](scripts/fetch-exercises.ts). The free API is
+  rate limited, so it takes a few minutes. The script also cleans the raw
+  catalogue: about 1 in 9 GIFs returned 404 (Sep 2026), and ~200 names
+  appeared more than once, differing only in GIF — every broken one had a
+  working twin — so it keeps one working copy per name (1,500 → 1,285).
+  It lowercases names, strips the "Step:1" prefixes from instructions,
+  and applies `NAME_OVERRIDES` (e.g. ExerciseDB's "cable standing rear
+  delt row (with rope)" is ours as "face pull"). **Edit names there, not
+  in the JSON** — a refresh would undo a hand edit.
+- Body parts come straight from ExerciseDB (upper legs, back, chest, …).
 - Search normalises the query and requires every word to appear in the
   exercise name, muscles, or equipment, ranking exact/prefix name matches
   first.
 - **/exercises** (the Library page) is server-rendered. Filters are a plain
   GET form, so the URL always reflects the current search — shareable and
   bookmarkable. Pagination uses a simple offset cursor.
-- **/exercises/[id]** shows the photo demo, step-by-step instructions,
-  target/secondary muscles, equipment, and difficulty — plus *your* recent
+- **/exercises/[id]** shows the animated demo, step-by-step instructions,
+  target/secondary muscles, and equipment — plus *your* recent
   sets of that exercise pulled from MySQL, and a "Log this exercise"
   shortcut.
 - The **exercise picker** inside the workout logger is a client component
@@ -241,10 +249,12 @@ ever touch the signed-in user's rows.
 
 ```
 RilesmanFitness/
-├── .env                        # DB credentials, AUTH_SECRET, API base URL
+├── .env                        # DB credentials, AUTH_SECRET
 ├── scripts/
 │   ├── schema.sql              # full database schema
-│   └── init-db.ts              # creates the DB from schema.sql (npm run db:init)
+│   ├── init-db.ts              # creates the DB from schema.sql (npm run db:init)
+│   ├── fetch-exercises.ts      # downloads + cleans the ExerciseDB catalogue (npm run data:exercises)
+│   └── migrations/             # one-off SQL data migrations, run by hand
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx          # root layout: fonts, nav, session fetch
@@ -261,13 +271,13 @@ RilesmanFitness/
 │   ├── components/
 │   │   ├── nav.tsx             # top nav (responsive, active-link aware)
 │   │   ├── exercise-card.tsx   # library grid card
-│   │   ├── exercise-image.tsx  # photo demo with two-frame animation
+│   │   ├── exercise-image.tsx  # exercise GIF, with 🏋️ fallback
 │   │   ├── exercise-picker.tsx # search modal used by the logger
 │   │   ├── workout-logger.tsx  # the interactive logging form
 │   │   ├── progress-charts.tsx # recharts line/bar charts
 │   │   └── delete-button.tsx   # confirm-then-delete
 │   ├── data/
-│   │   └── exercises.json      # bundled free-exercise-db catalogue (873)
+│   │   └── exercisedb.json     # saved ExerciseDB catalogue (1,285)
 │   ├── lib/
 │   │   ├── db.ts               # mysql2 connection pool
 │   │   ├── auth.ts             # NextAuth credentials config
@@ -297,7 +307,7 @@ RilesmanFitness/
 - **Server-rendered filters on /exercises** — search state lives in the
   URL, which plays nicely with the back button and needs no client state.
 
-## 9. History: why free-exercise-db replaced the ExerciseDB API
+## 9. History: ExerciseDB → free-exercise-db → ExerciseDB
 
 The app originally integrated the free ExerciseDB API
 (https://oss.exercisedb.dev) that was scouted for this project. It worked
@@ -311,6 +321,21 @@ the project — no API keys, no rate limits, nothing external to break.
 Photos are served from jsDelivr; if that CDN is ever unreachable a 🏋️
 placeholder appears instead
 ([src/components/exercise-image.tsx](src/components/exercise-image.tsx)).
+
+**September 2026: back to ExerciseDB.** Its CDN came back online, and the
+animated, muscle-highlighted GIFs plus the larger catalogue (1,285 vs 873)
+won out over the photos. This time the catalogue is **saved in the
+project** rather than called live: the free API is rate limited and its
+README says it is not meant for production, so the app never calls it at
+runtime. Only the GIFs load from ExerciseDB, and the 🏋️ fallback still
+covers an outage. If the free CDN proves unreliable again, ExerciseDB sells
+a self-hosted pack (Starter, $199 one-time, 360px GIFs).
+
+Saved workouts store the catalogue id, and personal records and progress
+charts group by exercise **name**, so the switch shipped with a one-off
+migration ([scripts/migrations/2026-09-29-exercisedb.sql](scripts/migrations/2026-09-29-exercisedb.sql))
+that moves every logged exercise to its ExerciseDB id and name. Without the
+name change, old and new sets of the same lift would split into two records.
 
 ## 10. Ideas for later
 

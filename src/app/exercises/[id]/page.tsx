@@ -49,7 +49,9 @@ export default async function ExerciseDetailPage({
           <ExerciseImage
             images={exercise.images}
             alt={exercise.name}
-            className="aspect-[3/2] w-full object-cover"
+            // ExerciseDB free-tier GIFs are 180px; past ~2x they turn soft, so
+            // cap the size and let the white box carry the full width.
+            className="mx-auto aspect-square w-full max-w-sm object-contain"
           />
         </div>
 

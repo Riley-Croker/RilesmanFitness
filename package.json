@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:init": "tsx --env-file=.env scripts/init-db.ts"
+    "db:init": "tsx --env-file=.env scripts/init-db.ts",
+    "data:exercises": "tsx scripts/fetch-exercises.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
