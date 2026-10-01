@@ -13,6 +13,10 @@ import type { WorkoutExerciseInput } from "@/types";
 
 export interface DraftExercise extends WorkoutExerciseInput {
   images?: string[];
+  // Stable client-side id so the logger can tell exercises apart when they
+  // are reordered. Optional because drafts saved before reordering existed
+  // don't have one; the logger fills in any that are missing.
+  uid?: string;
 }
 
 export interface WorkoutDraft {

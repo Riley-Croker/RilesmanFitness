@@ -277,6 +277,20 @@ Then:
 5. **Save as template** instead stores the exercise list (with set/rep
    targets taken from what you entered) as a reusable routine.
 
+**Reordering.** With two or more exercises, **⇅ Reorder** collapses them to
+one-line rows ([exercise-reorder-list.tsx](src/components/exercise-reorder-list.tsx))
+dragged by their ⠿ handle; **Done** returns to the full cards. Built on
+dnd-kit (`@dnd-kit/core` + `sortable`), loaded only when Reorder mode opens.
+Only the handle starts a drag (it has `touch-action: none`), so swiping
+elsewhere still scrolls on a phone. Keyboard works too: focus a handle,
+Space to pick up, ↑/↓ to move, Space to drop, Escape to cancel, with
+screen-reader announcements by exercise name. The new order is simply the
+new array order, so it's saved in the draft and becomes each exercise's
+`sort_order` when the workout is saved. Every logger exercise carries a
+stable `uid` used as its React key; without it, reordering would leave
+focus and image state attached to the old positions. Drafts saved before
+`uid` existed get one when they're restored.
+
 **The timer** stores the moment Start was pressed and shows `now − start`
 every second. It is never a running counter, so it stays correct when a
 phone sleeps between sets and pauses the page.
@@ -434,6 +448,7 @@ RilesmanFitness/
 │   │   ├── exercise-picker.tsx # search modal used by the logger
 │   │   ├── workout-logger.tsx  # the interactive logging form, with the live timer
 │   │   ├── workout-logger-loader.tsx # renders the logger browser-only (localStorage draft)
+│   │   ├── exercise-reorder-list.tsx # drag-to-reorder mode for the logger (dnd-kit)
 │   │   ├── body-map.tsx        # front/back muscle map on the summary
 │   │   ├── body-map-data.ts    # its polygon outlines (MIT, see file header)
 │   │   ├── save-image-button.tsx # summary card → PNG → share sheet / download

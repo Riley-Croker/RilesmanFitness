@@ -16,16 +16,30 @@
 // this component is rendered browser-only (workout-logger-loader.tsx).
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import ExerciseImage from "@/components/exercise-image";
 import ExercisePicker from "@/components/exercise-picker";
+import type { ReorderItem } from "@/components/exercise-reorder-list";
 import { withBasePath } from "@/lib/base-path";
 import { formatClock } from "@/lib/duration";
 import { toDisplayWeight, toStoredLbs, type WeightUnit } from "@/lib/units";
 import { clearDraft, loadDraft, saveDraft, type DraftExercise, type WorkoutDraft } from "@/lib/workout-draft";
 import type { Exercise } from "@/types";
 
-type LoggerExercise = DraftExercise;
+// Reorder mode pulls in the drag-and-drop library, so it's loaded only when
+// someone actually opens it.
+const ExerciseReorderList = dynamic(() => import("@/components/exercise-reorder-list"), {
+  loading: () => <p className="py-6 text-center text-sm text-zinc-500">Loading…</p>,
+});
+
+// Every exercise in the logger carries a stable uid. React uses it as the
+// card's key, so when exercises are reordered each card's state (focus,
+// image) moves with its exercise instead of staying at the old position.
+type LoggerExercise = ReorderItem;
+
+const withUid = (ex: DraftExercise): LoggerExercise =>
+  ex.uid ? (ex as LoggerExercise) : { ...ex, uid: crypto.randomUUID() };
 
 function today() {
   const d = new Date();
@@ -55,7 +69,7 @@ export default function WorkoutLogger({
 }: {
   userId: string;
   initialName?: string;
-  initialExercises?: LoggerExercise[];
+  initialExercises?: DraftExercise[];
   weightUnit?: WeightUnit;
 }) {
   const router = useRouter();
@@ -67,7 +81,12 @@ export default function WorkoutLogger({
   const [name, setName] = useState(restored?.name ?? initialName);
   const [date, setDate] = useState(restored?.date ?? today());
   const [notes, setNotes] = useState(restored?.notes ?? "");
-  const [exercises, setExercises] = useState<LoggerExercise[]>(restored?.exercises ?? initialExercises);
+  // Lazy, so the uids are generated once rather than on every render.
+  // Drafts saved before reordering existed get theirs here.
+  const [exercises, setExercises] = useState<LoggerExercise[]>(() =>
+    (restored?.exercises ?? initialExercises).map(withUid)
+  );
+  const [reordering, setReordering] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(restored?.startedAt ?? null);
   const [now, setNow] = useState(() => Date.now());
   const [showRestored, setShowRestored] = useState(restored !== null);
@@ -126,6 +145,7 @@ export default function WorkoutLogger({
     setExercises((prev) => [
       ...prev,
       {
+        uid: crypto.randomUUID(),
         exerciseId: ex.exerciseId || null,
         name: ex.name,
         bodyPart: ex.bodyParts[0] ?? null,
@@ -331,68 +351,103 @@ export default function WorkoutLogger({
         className={`${inputClass} mt-3 w-full`}
       />
 
-      {/* Exercises */}
-      <div className="mt-6 flex flex-col gap-4">
-        {exercises.map((ex, exIdx) => (
-          <div key={exIdx} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-white">
-                <ExerciseImage
-                  images={ex.images ?? []}
-                  alt={ex.name}
-                  animate={false}
-                  className="h-full w-full object-cover"
-                />
+      {/* Exercises header - the Reorder toggle needs at least two to swap */}
+      {exercises.length >= 2 && (
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <p className="text-sm text-zinc-400">
+            {reordering ? "Drag ⠿ to change the order" : `${exercises.length} exercises`}
+          </p>
+          <button
+            onClick={() => setReordering((r) => !r)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              reordering
+                ? "bg-lime-400 text-zinc-950 hover:bg-lime-300"
+                : "border border-zinc-700 text-zinc-300 hover:border-zinc-500"
+            }`}
+          >
+            {reordering ? "Done" : "⇅ Reorder"}
+          </button>
+        </div>
+      )}
+
+      {reordering ? (
+        <div className="mt-3">
+          {/* Changing the order only rewrites the exercises array; the
+              draft effect saves it, and the save sends it in this order,
+              which becomes each exercise's sort_order in the database. */}
+          <ExerciseReorderList exercises={exercises} onReorder={setExercises} />
+          <button
+            onClick={() => setReordering(false)}
+            className="mt-4 w-full rounded-xl bg-lime-400 py-3 font-semibold text-zinc-950 transition-colors hover:bg-lime-300"
+          >
+            Done
+          </button>
+        </div>
+      ) : (
+        <>
+        <div className={`${exercises.length >= 2 ? "mt-3" : "mt-6"} flex flex-col gap-4`}>
+          {exercises.map((ex, exIdx) => (
+            <div key={ex.uid} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-white">
+                  <ExerciseImage
+                    images={ex.images ?? []}
+                    alt={ex.name}
+                    animate={false}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold capitalize">{ex.name}</p>
+                  {ex.bodyPart && (
+                    <p className="text-xs capitalize text-zinc-400">
+                      {ex.bodyPart}{ex.equipment ? ` · ${ex.equipment}` : ""}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeExercise(exIdx)}
+                  className="text-sm text-zinc-500 hover:text-red-400"
+                >
+                  Remove
+                </button>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold capitalize">{ex.name}</p>
-                {ex.bodyPart && (
-                  <p className="text-xs capitalize text-zinc-400">
-                    {ex.bodyPart}{ex.equipment ? ` · ${ex.equipment}` : ""}
-                  </p>
-                )}
+
+              {/* Sets table */}
+              <div className="mt-3 grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2 text-sm">
+                <span className="text-xs text-zinc-500">Set</span>
+                <span className="text-xs text-zinc-500">Reps</span>
+                <span className="text-xs text-zinc-500">Weight ({weightUnit})</span>
+                <span />
+                {ex.sets.map((set, setIdx) => (
+                  <SetRow
+                    key={setIdx}
+                    index={setIdx}
+                    reps={set.reps}
+                    weight={set.weight}
+                    onChange={(field, value) => updateSet(exIdx, setIdx, field, value)}
+                    onRemove={() => removeSet(exIdx, setIdx)}
+                  />
+                ))}
               </div>
               <button
-                onClick={() => removeExercise(exIdx)}
-                className="text-sm text-zinc-500 hover:text-red-400"
+                onClick={() => addSet(exIdx)}
+                className="mt-3 text-sm font-medium text-lime-400 hover:underline"
               >
-                Remove
+                + Add set
               </button>
             </div>
+          ))}
+        </div>
 
-            {/* Sets table */}
-            <div className="mt-3 grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2 text-sm">
-              <span className="text-xs text-zinc-500">Set</span>
-              <span className="text-xs text-zinc-500">Reps</span>
-              <span className="text-xs text-zinc-500">Weight ({weightUnit})</span>
-              <span />
-              {ex.sets.map((set, setIdx) => (
-                <SetRow
-                  key={setIdx}
-                  index={setIdx}
-                  reps={set.reps}
-                  weight={set.weight}
-                  onChange={(field, value) => updateSet(exIdx, setIdx, field, value)}
-                  onRemove={() => removeSet(exIdx, setIdx)}
-                />
-              ))}
-            </div>
-            <button
-              onClick={() => addSet(exIdx)}
-              className="mt-3 text-sm font-medium text-lime-400 hover:underline"
-            >
-              + Add set
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <button
-        onClick={() => setPickerOpen(true)}
-        className="mt-4 w-full rounded-xl border border-dashed border-zinc-700 py-4 font-medium text-zinc-400 transition-colors hover:border-lime-400/60 hover:text-lime-400"
-      >
-        + Add exercise
-      </button>
+        <button
+          onClick={() => setPickerOpen(true)}
+          className="mt-4 w-full rounded-xl border border-dashed border-zinc-700 py-4 font-medium text-zinc-400 transition-colors hover:border-lime-400/60 hover:text-lime-400"
+        >
+          + Add exercise
+        </button>
+        </>
+      )}
 
       {error && (
         <p className="mt-4 rounded-lg border border-red-900 bg-red-950/50 px-3 py-2 text-sm text-red-400">
@@ -405,21 +460,25 @@ export default function WorkoutLogger({
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="flex-1 rounded-lg bg-lime-400 py-3 font-semibold text-zinc-950 transition-colors hover:bg-lime-300 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : timed ? "Finish Workout" : "Save Workout"}
-        </button>
-        <button
-          onClick={saveAsTemplate}
-          className="rounded-lg border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition-colors hover:border-zinc-500"
-        >
-          Save as template
-        </button>
-      </div>
+      {/* Hidden while reordering, so Done is the obvious next step. A live
+          workout can still be finished from the timer bar. */}
+      {!reordering && (
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex-1 rounded-lg bg-lime-400 py-3 font-semibold text-zinc-950 transition-colors hover:bg-lime-300 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : timed ? "Finish Workout" : "Save Workout"}
+          </button>
+          <button
+            onClick={saveAsTemplate}
+            className="rounded-lg border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition-colors hover:border-zinc-500"
+          >
+            Save as template
+          </button>
+        </div>
+      )}
 
       {pickerOpen && <ExercisePicker onPick={addExercise} onClose={() => setPickerOpen(false)} />}
     </div>
