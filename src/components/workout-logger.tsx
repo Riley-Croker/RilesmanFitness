@@ -20,6 +20,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import ExerciseImage from "@/components/exercise-image";
 import ExercisePicker from "@/components/exercise-picker";
+import SubstitutePicker from "@/components/substitute-picker";
 import type { ReorderItem } from "@/components/exercise-reorder-list";
 import { withBasePath } from "@/lib/base-path";
 import { formatClock } from "@/lib/duration";
@@ -91,6 +92,11 @@ export default function WorkoutLogger({
   const [now, setNow] = useState(() => Date.now());
   const [showRestored, setShowRestored] = useState(restored !== null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Swapping an exercise: swapIdx opens the substitutes sheet for that card;
+  // replaceIdx makes the full picker replace that card instead of adding one
+  // (reached via "Search all exercises", or Swap on a custom exercise).
+  const [swapIdx, setSwapIdx] = useState<number | null>(null);
+  const [replaceIdx, setReplaceIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templateSaved, setTemplateSaved] = useState(false);
@@ -184,6 +190,45 @@ export default function WorkoutLogger({
 
   const removeExercise = (exIdx: number) => {
     setExercises((prev) => prev.filter((_, i) => i !== exIdx));
+  };
+
+  // Swap in place: same position, same number of sets and reps, weights
+  // cleared - 100 lbs on a machine says nothing about the dumbbell version.
+  // A new uid, because it's a different exercise (see the note on keys).
+  const replaceExercise = (exIdx: number, ex: Exercise) => {
+    setExercises((prev) =>
+      prev.map((old, i) =>
+        i !== exIdx
+          ? old
+          : {
+              uid: crypto.randomUUID(),
+              exerciseId: ex.exerciseId || null,
+              name: ex.name,
+              bodyPart: ex.bodyParts[0] ?? null,
+              equipment: ex.equipments[0] ?? null,
+              targetMuscle: ex.targetMuscles[0] ?? null,
+              images: ex.images,
+              sets: old.sets.length
+                ? old.sets.map((s) => ({ reps: s.reps, weight: 0 }))
+                : [{ reps: 10, weight: 0 }],
+            }
+      )
+    );
+  };
+
+  const openSwap = (exIdx: number) => {
+    // Custom exercises have no muscle data to match on, so go straight to search.
+    if (exercises[exIdx]?.exerciseId) {
+      setSwapIdx(exIdx);
+    } else {
+      setReplaceIdx(exIdx);
+      setPickerOpen(true);
+    }
+  };
+
+  const closePicker = () => {
+    setPickerOpen(false);
+    setReplaceIdx(null);
   };
 
   const save = async () => {
@@ -406,6 +451,13 @@ export default function WorkoutLogger({
                   )}
                 </div>
                 <button
+                  onClick={() => openSwap(exIdx)}
+                  className="text-sm text-zinc-400 hover:text-lime-400"
+                  aria-label={`Swap ${ex.name} for a similar exercise`}
+                >
+                  ⇄ Swap
+                </button>
+                <button
                   onClick={() => removeExercise(exIdx)}
                   className="text-sm text-zinc-500 hover:text-red-400"
                 >
@@ -480,7 +532,36 @@ export default function WorkoutLogger({
         </div>
       )}
 
-      {pickerOpen && <ExercisePicker onPick={addExercise} onClose={() => setPickerOpen(false)} />}
+      {pickerOpen && (
+        <ExercisePicker
+          title={replaceIdx !== null ? "Swap exercise" : "Add exercise"}
+          onPick={(ex) => {
+            if (replaceIdx !== null) {
+              replaceExercise(replaceIdx, ex);
+              closePicker();
+            } else {
+              addExercise(ex);
+            }
+          }}
+          onClose={closePicker}
+        />
+      )}
+      {swapIdx !== null && exercises[swapIdx]?.exerciseId && (
+        <SubstitutePicker
+          exerciseId={exercises[swapIdx].exerciseId!}
+          exerciseName={exercises[swapIdx].name}
+          onPick={(ex) => {
+            replaceExercise(swapIdx, ex);
+            setSwapIdx(null);
+          }}
+          onSearchAll={() => {
+            setReplaceIdx(swapIdx);
+            setSwapIdx(null);
+            setPickerOpen(true);
+          }}
+          onClose={() => setSwapIdx(null)}
+        />
+      )}
     </div>
   );
 }

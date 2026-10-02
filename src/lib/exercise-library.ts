@@ -136,3 +136,124 @@ export async function getExercises(
 export async function getExercise(exerciseId: string): Promise<Exercise | null> {
   return BY_ID.get(exerciseId) ?? null;
 }
+
+// ---- Substitutes -----------------------------------------------------------
+//
+// "The machine's taken - what else can I do?" Suggests exercises that do the
+// same job as the given one, for the logger's Swap button.
+//
+// ExerciseDB's muscle tags are coarse (face pull and overhead press are both
+// just "deltoids"), so muscles alone aren't enough. Three signals:
+//   - main muscle: a candidate must work the original's first target muscle
+//     (or have it as a secondary muscle and the same body part)
+//   - secondary muscles: the share of the original's secondaries it also works
+//   - movement name: the share of the original's movement words it shares,
+//     after dropping equipment/posture words, so "dumbbell lateral raise" and
+//     "cable lateral raise" both reduce to "lateral raise"
+//
+// Order: well-known exercises that are the same movement first, then by how
+// similar (in coarse bands), and within a band like the rest of the app -
+// what you've done most, then popularity tier.
+
+// Words that say how or with what, not which movement.
+const NON_MOVEMENT_WORDS = new Set([
+  "barbell", "dumbbell", "dumbbells", "cable", "machine", "lever", "leverage", "smith", "band",
+  "kettlebell", "sled", "ez", "bar", "bodyweight", "weighted", "assisted", "with", "on", "the",
+  "a", "of", "and", "standing", "seated", "lying", "single", "arm", "one", "two", "alternate",
+  "alternating", "rope", "attachment", "v", "grip", "close", "wide", "reverse",
+]);
+
+function movementWords(name: string): Set<string> {
+  return new Set(
+    normalise(name)
+      .split(" ")
+      .filter((w) => w && !NON_MOVEMENT_WORDS.has(w) && !/^\d+$/.test(w))
+  );
+}
+
+const SWAP_CHIP_EQUIPMENT = new Set([
+  "dumbbell", "barbell", "cable", "leverage machine", "smith machine", "bodyweight", "kettlebell", "EZ bar",
+]);
+
+// "barbell full squat (back pov)" is the same exercise filmed from behind.
+const withoutCameraAngle = (name: string) => name.replace(/\s*\((?:front|back|side)?\s*pov\)$/, "");
+
+export interface SubstituteResult {
+  base: Exercise | null;
+  // Equipment present among the suggestions, most common first - the chips.
+  equipments: string[];
+  exercises: Exercise[];
+}
+
+export async function getSubstitutes(
+  exerciseId: string,
+  options: { usage?: ReadonlyMap<string, number>; equipment?: string; limit?: number } = {}
+): Promise<SubstituteResult> {
+  const base = BY_ID.get(exerciseId) ?? null;
+  if (!base || base.targetMuscles.length === 0) return { base, equipments: [], exercises: [] };
+
+  const primary = base.targetMuscles[0];
+  const baseSecondary = new Set(base.secondaryMuscles);
+  const baseMoves = movementWords(base.name);
+  const baseIsStretch = base.name.includes("stretch");
+  const baseName = withoutCameraAngle(base.name);
+
+  const candidates = EXERCISES.filter(
+    (c) =>
+      c.exerciseId !== base.exerciseId &&
+      withoutCameraAngle(c.name) !== baseName &&
+      // Stretches share muscles with lifts but don't replace them.
+      (baseIsStretch || !c.name.includes("stretch")) &&
+      (c.targetMuscles.includes(primary) ||
+        (c.secondaryMuscles.includes(primary) && c.bodyParts[0] === base.bodyParts[0]))
+  );
+
+  const scored = candidates.map((c) => {
+    const secondaryShare = baseSecondary.size
+      ? c.secondaryMuscles.filter((m) => baseSecondary.has(m)).length / baseSecondary.size
+      : 0;
+    const moves = movementWords(c.name);
+    const nameShare = baseMoves.size ? [...baseMoves].filter((w) => moves.has(w)).length / baseMoves.size : 0;
+    const similarity = (c.targetMuscles.includes(primary) ? 1 : 0) + secondaryShare + nameShare; // 0..3
+    const tier = tierOf(c.exerciseId);
+    return {
+      e: c,
+      done: options.usage?.get(c.exerciseId) ?? 0,
+      tier,
+      similarity,
+      // Same movement and a well-known exercise: the obvious swap.
+      sameMovement: nameShare === 1 && tier <= 1 ? 0 : 1,
+      band: similarity >= 2 ? 0 : similarity >= 1.5 ? 1 : similarity >= 1 ? 2 : 3,
+    };
+  });
+
+  // Chips: the gym equipment among all candidates (before the equipment
+  // filter), most common first, at most five. Oddities like "stability ball"
+  // stay reachable through "Search all exercises".
+  const equipmentCounts = new Map<string, number>();
+  for (const { e } of scored) {
+    for (const eq of e.equipments) {
+      if (SWAP_CHIP_EQUIPMENT.has(eq)) equipmentCounts.set(eq, (equipmentCounts.get(eq) ?? 0) + 1);
+    }
+  }
+  const equipments = [...equipmentCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 5)
+    .map(([eq]) => eq);
+
+  const exercises = scored
+    .filter((x) => !options.equipment || x.e.equipments.includes(options.equipment))
+    .sort(
+      (a, b) =>
+        a.sameMovement - b.sameMovement ||
+        a.band - b.band ||
+        b.done - a.done ||
+        a.tier - b.tier ||
+        b.similarity - a.similarity ||
+        a.e.name.localeCompare(b.e.name)
+    )
+    .slice(0, Math.min(Math.max(options.limit ?? 8, 1), 30))
+    .map(({ e, done }) => (done > 0 ? { ...e, timesDone: done } : e));
+
+  return { base, equipments, exercises };
+}

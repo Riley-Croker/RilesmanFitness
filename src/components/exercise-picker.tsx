@@ -17,9 +17,11 @@ const BODY_PARTS = [
 export default function ExercisePicker({
   onPick,
   onClose,
+  title = "Add exercise",
 }: {
   onPick: (exercise: Exercise) => void;
   onClose: () => void;
+  title?: string;
 }) {
   const [search, setSearch] = useState("");
   const [bodyPart, setBodyPart] = useState("");
@@ -67,7 +69,7 @@ export default function ExercisePicker({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-zinc-800 p-4">
-          <h2 className="text-lg font-semibold">Add exercise</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100" aria-label="Close">
             ✕
           </button>

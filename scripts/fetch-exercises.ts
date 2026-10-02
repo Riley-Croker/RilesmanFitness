@@ -23,6 +23,9 @@
 const NAME_OVERRIDES: Record<string, string> = {
   ZfyAGhK: "face pull", // ExerciseDB: "cable standing rear delt row (with rope)"
   wdRZISl: "barbell overhead press", // ExerciseDB: "barbell standing close-grip military press"
+  // ExerciseDB has no hip thrust; its closest exercise stands in, so the
+  // GIF shows a floor glute bridge rather than a bench-supported thrust.
+  qKBpF7I: "barbell hip thrust", // ExerciseDB: "barbell glute bridge"
 };
 
 import { writeFileSync } from "fs";

@@ -168,8 +168,9 @@ no network calls:
 
   Logged-out visitors (the library is public) get steps 2–4 with no counts.
   The catalogue lacks a few classics, so their closest real exercise holds
-  the staple slot: barbell glute bridge for hip thrust, and ExerciseDB's
-  barbell standing close-grip military press, renamed "barbell overhead
+  the staple slot, renamed to what people call it: ExerciseDB's barbell
+  glute bridge is "barbell hip thrust" (its GIF still shows a floor bridge),
+  and its barbell standing close-grip military press is "barbell overhead
   press". `npm run data:exercises`
   warns if a refresh drops any tiered id.
 - **/exercises** (the Library page) is server-rendered. Filters are a plain
@@ -299,6 +300,30 @@ Then:
    summary (4.5).
 5. **Save as template** instead stores the exercise list (with set/rep
    targets taken from what you entered) as a reusable routine.
+
+**Swapping.** Each exercise has **⇄ Swap** for when the equipment is taken.
+It opens a sheet of substitutes
+([substitute-picker.tsx](src/components/substitute-picker.tsx), via
+`GET /api/exercises/[id]/substitutes`), with equipment chips (All, Dumbbell,
+Barbell, Cable, Machine, …) and **Search all exercises** as a fallback.
+Picking one replaces the exercise **in place**, keeping its number of sets
+and reps but clearing the weights (they rarely transfer between equipment).
+Custom exercises have no muscle data, so their Swap opens the full search.
+
+`getSubstitutes` in [exercise-library.ts](src/lib/exercise-library.ts) picks
+candidates that work the original's main muscle, then scores them on three
+signals, because ExerciseDB's muscle tags alone are too coarse (face pull and
+overhead press are both just "deltoids"):
+- main muscle shared;
+- share of the original's secondary muscles also worked;
+- share of its **movement words** — the name minus equipment and posture
+  words — so "dumbbell lateral raise" and "cable lateral raise" both reduce
+  to "lateral raise".
+
+Well-known exercises that are the same movement come first, then everything
+else in similarity bands; within a band, your history then popularity tier,
+as in search. Stretches are left out (unless swapping a stretch), and so are
+camera-angle duplicates like "barbell full squat (back pov)".
 
 **Reordering.** With two or more exercises, **⇅ Reorder** collapses them to
 one-line rows ([exercise-reorder-list.tsx](src/components/exercise-reorder-list.tsx))
@@ -437,6 +462,7 @@ ever touch the signed-in user's rows.
 | `DELETE /api/templates/[id]` | Delete a template |
 | `GET /api/exercises` | Query the local catalogue: `?search=&bodyPart=&equipment=&muscle=&after=&limit=`. Public; when signed in, ranked by your history first with a `timesDone` count |
 | `GET /api/exercises/[id]` | One exercise from the catalogue |
+| `GET /api/exercises/[id]/substitutes` | Exercises that can replace this one, for the logger's Swap button: `?equipment=` to filter. Returns the equipment chips too. Public; ranked by your history when signed in |
 | `POST /api/settings` | Update preferences: `{ "weightUnit": "lbs" \| "kg" }` |
 | `GET /api/stats/progress` | Time series for one exercise: `?exercise=<name>` |
 | `GET|POST /api/auth/*` | NextAuth internals (login, session, logout) |
@@ -472,6 +498,7 @@ RilesmanFitness/
 │   │   ├── workout-logger.tsx  # the interactive logging form, with the live timer
 │   │   ├── workout-logger-loader.tsx # renders the logger browser-only (localStorage draft)
 │   │   ├── exercise-reorder-list.tsx # drag-to-reorder mode for the logger (dnd-kit)
+│   │   ├── substitute-picker.tsx # the logger's Swap sheet (similar exercises)
 │   │   ├── body-map.tsx        # front/back muscle map on the summary
 │   │   ├── body-map-data.ts    # its polygon outlines (MIT, see file header)
 │   │   ├── save-image-button.tsx # summary card → PNG → share sheet / download

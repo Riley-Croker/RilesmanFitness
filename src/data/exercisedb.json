@@ -3354,32 +3354,6 @@
   ]
  },
  {
-  "exerciseId": "qKBpF7I",
-  "name": "barbell glute bridge",
-  "gifUrl": "https://static.exercisedb.dev/media/qKBpF7I.gif",
-  "bodyParts": [
-   "upper legs"
-  ],
-  "equipments": [
-   "barbell"
-  ],
-  "targetMuscles": [
-   "glutes"
-  ],
-  "secondaryMuscles": [
-   "hamstrings",
-   "erector spinae"
-  ],
-  "instructions": [
-   "Begin by lying flat on your back on the ground with your knees bent and feet planted.",
-   "Set a barbell across your hips, holding it securely with both hands.",
-   "Plant the feet and keep the ribs from flaring as the hips prepare to rise.",
-   "Press through the feet and lift your hips until your torso and thighs line up.",
-   "Stop when the hips line up with the torso; do not arch higher through the lower back.",
-   "Lower the hips steadily and keep the feet planted for the next lift."
-  ]
- },
- {
   "exerciseId": "qg2PGl6",
   "name": "barbell glute bridge two-leg on bench",
   "gifUrl": "https://static.exercisedb.dev/media/qg2PGl6.gif",
@@ -3509,6 +3483,32 @@
    "Bend at the hips and knees to lower, keeping your feet grounded and knees tracking with the toes.",
    "Drive upward with the chest and hips rising together; keep the knees from collapsing inward.",
    "Stand fully, reset your footing and breathing, then begin the next descent."
+  ]
+ },
+ {
+  "exerciseId": "qKBpF7I",
+  "name": "barbell hip thrust",
+  "gifUrl": "https://static.exercisedb.dev/media/qKBpF7I.gif",
+  "bodyParts": [
+   "upper legs"
+  ],
+  "equipments": [
+   "barbell"
+  ],
+  "targetMuscles": [
+   "glutes"
+  ],
+  "secondaryMuscles": [
+   "hamstrings",
+   "erector spinae"
+  ],
+  "instructions": [
+   "Begin by lying flat on your back on the ground with your knees bent and feet planted.",
+   "Set a barbell across your hips, holding it securely with both hands.",
+   "Plant the feet and keep the ribs from flaring as the hips prepare to rise.",
+   "Press through the feet and lift your hips until your torso and thighs line up.",
+   "Stop when the hips line up with the torso; do not arch higher through the lower back.",
+   "Lower the hips steadily and keep the feet planted for the next lift."
   ]
  },
  {

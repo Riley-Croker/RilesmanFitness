@@ -15,7 +15,8 @@
 // exercise in the app: it's the last part of the URL.
 //
 // Gaps in the catalogue, filled with the closest real exercise:
-//   hip thrust      -> barbell glute bridge
+//   hip thrust      -> ExerciseDB's "barbell glute bridge",
+//                      renamed "barbell hip thrust" in NAME_OVERRIDES
 //   overhead press  -> ExerciseDB's "barbell standing close-grip military press",
 //                      renamed "barbell overhead press" in NAME_OVERRIDES
 //   plank           -> weighted front plank (common)
@@ -50,7 +51,7 @@ export const STAPLE: readonly string[] = [
   "qx4fgX7", // dumbbell single leg split squat
   "8ozhUIZ", // barbell standing calf raise
   "yn8yg1r", // dumbbell goblet squat
-  "qKBpF7I", // barbell glute bridge
+  "qKBpF7I", // barbell hip thrust (renamed via NAME_OVERRIDES)
   // Shoulders
   "wdRZISl", // barbell overhead press (renamed via NAME_OVERRIDES)
   "znQUdHY", // dumbbell seated shoulder press
