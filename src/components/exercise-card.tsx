@@ -22,6 +22,12 @@ export default function ExerciseCard({ exercise }: { exercise: Exercise }) {
           {exercise.name}
         </h3>
         <div className="mt-2 flex flex-wrap gap-1.5">
+          {/* How often you've done it - also why it's ranked where it is. */}
+          {(exercise.timesDone ?? 0) > 0 && (
+            <span className="rounded-full bg-lime-400 px-2 py-0.5 text-xs font-semibold text-zinc-950">
+              You: {exercise.timesDone}×
+            </span>
+          )}
           {exercise.bodyParts.slice(0, 2).map((bp) => (
             <span key={bp} className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs capitalize text-zinc-300">
               {bp}

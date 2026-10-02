@@ -4032,6 +4032,32 @@
   ]
  },
  {
+  "exerciseId": "wdRZISl",
+  "name": "barbell overhead press",
+  "gifUrl": "https://static.exercisedb.dev/media/wdRZISl.gif",
+  "bodyParts": [
+   "shoulders"
+  ],
+  "equipments": [
+   "barbell"
+  ],
+  "targetMuscles": [
+   "deltoids"
+  ],
+  "secondaryMuscles": [
+   "triceps",
+   "upper back"
+  ],
+  "instructions": [
+   "Stand and set your feet about shoulder width and hold the barbell with palms facing down, hands slightly closer than about shoulder width.",
+   "Before moving, lift the barbell to shoulder height, keeping your elbows close to your body.",
+   "Brace the torso and align the wrists with the forearms.",
+   "Press the weight or handles away while keeping your trunk braced.",
+   "Keep the wrists stacked and use a shoulder path that feels natural.",
+   "Lower the weight to its starting height under control before pressing again."
+  ]
+ },
+ {
   "exerciseId": "gfk9kD4",
   "name": "barbell overhead squat",
   "gifUrl": "https://static.exercisedb.dev/media/gfk9kD4.gif",
@@ -5486,32 +5512,6 @@
    "Bend your elbows to bring the weight toward your shoulders without swinging your torso.",
    "Keep the torso quiet and let the elbow bend lift the weight.",
    "Lower until the elbows are nearly straight, keeping the upper arms still."
-  ]
- },
- {
-  "exerciseId": "wdRZISl",
-  "name": "barbell standing close-grip military press",
-  "gifUrl": "https://static.exercisedb.dev/media/wdRZISl.gif",
-  "bodyParts": [
-   "shoulders"
-  ],
-  "equipments": [
-   "barbell"
-  ],
-  "targetMuscles": [
-   "deltoids"
-  ],
-  "secondaryMuscles": [
-   "triceps",
-   "upper back"
-  ],
-  "instructions": [
-   "Stand and set your feet about shoulder width and hold the barbell with palms facing down, hands slightly closer than about shoulder width.",
-   "Before moving, lift the barbell to shoulder height, keeping your elbows close to your body.",
-   "Brace the torso and align the wrists with the forearms.",
-   "Press the weight or handles away while keeping your trunk braced.",
-   "Keep the wrists stacked and use a shoulder path that feels natural.",
-   "Lower the weight to its starting height under control before pressing again."
   ]
  },
  {

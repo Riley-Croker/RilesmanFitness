@@ -22,10 +22,12 @@
 // logged splits their history unless the database rows are updated too.
 const NAME_OVERRIDES: Record<string, string> = {
   ZfyAGhK: "face pull", // ExerciseDB: "cable standing rear delt row (with rope)"
+  wdRZISl: "barbell overhead press", // ExerciseDB: "barbell standing close-grip military press"
 };
 
 import { writeFileSync } from "fs";
 import { join } from "path";
+import { COMMON, STAPLE } from "../src/data/exercise-popularity";
 
 const BASE = "https://oss.exercisedb.dev/api/v1/exercises";
 const OUT = join(process.cwd(), "src", "data", "exercisedb.json");
@@ -144,6 +146,18 @@ async function main() {
 
   writeFileSync(OUT, JSON.stringify(list, null, 1) + "\n");
   console.log(`3/3 saved ${list.length} exercises (from ${raw.length} downloaded) to ${OUT}`);
+
+  // The popularity tiers refer to exercises by id. One that vanished from
+  // this download (removed upstream, or its GIF broke and a twin was kept
+  // instead) would silently lose its ranking, so name them.
+  const kept = new Set(list.map((e) => e.exerciseId));
+  const lost = [...STAPLE, ...COMMON].filter((id) => !kept.has(id));
+  if (lost.length > 0) {
+    console.warn(
+      `\nsrc/data/exercise-popularity.ts lists ${lost.length} id(s) no longer in the catalogue: ${lost.join(", ")}.\n` +
+        `They're ignored. Find the replacement exercise and swap its id in.`
+    );
+  }
 }
 
 main().catch((err) => {

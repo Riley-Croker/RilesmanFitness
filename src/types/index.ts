@@ -6,6 +6,9 @@ export interface Exercise {
   exerciseId: string;
   name: string;
   images: string[]; // demonstration media: one animated GIF per ExerciseDB exercise
+  // How many of the signed-in user's workouts included this exercise. Only
+  // set on results from getExercises when it was given the user's history.
+  timesDone?: number;
   bodyParts: string[];
   equipments: string[];
   targetMuscles: string[];

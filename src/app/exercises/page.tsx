@@ -4,7 +4,9 @@
 
 import Link from "next/link";
 import ExerciseCard from "@/components/exercise-card";
+import { auth } from "@/lib/auth";
 import { getBodyParts, getEquipments, getExercises, getMuscles } from "@/lib/exercise-library";
+import { getExerciseUsage } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +24,19 @@ export default async function ExercisesPage({
   searchParams: Promise<Search>;
 }) {
   const params = await searchParams;
+  // The library is public. Signed in, your own history ranks first.
+  const session = await auth();
+  const usage = session?.user?.id ? await getExerciseUsage(session.user.id) : undefined;
   const [bodyParts, equipments, muscles, page] = await Promise.all([
     getBodyParts(),
     getEquipments(),
     getMuscles(),
-    getExercises({ ...params, limit: 12 }),
+    getExercises({ ...params, limit: 12 }, usage),
   ]);
 
-  // Build the "next page" link, preserving active filters.
+  // Build the "next page" link, preserving the search and active filters.
   const nextParams = new URLSearchParams();
+  if (params.search) nextParams.set("search", params.search);
   if (params.bodyPart) nextParams.set("bodyPart", params.bodyPart);
   if (params.equipment) nextParams.set("equipment", params.equipment);
   if (params.muscle) nextParams.set("muscle", params.muscle);

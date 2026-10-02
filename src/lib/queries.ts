@@ -95,6 +95,22 @@ export async function getWorkoutDetail(userId: string, workoutId: string): Promi
   };
 }
 
+// How often the user has done each catalogue exercise: exerciseId -> number
+// of their workouts it appeared in (not sets - 4 sets in one workout counts
+// once). Drives the "what you do most comes first" ranking and the "You: 12×"
+// badge in exercise search. Custom exercises have no id, so they're skipped.
+export async function getExerciseUsage(userId: string): Promise<Map<string, number>> {
+  const [rows] = await db.execute(
+    `SELECT we.exercise_id, COUNT(DISTINCT we.workout_id) AS times
+     FROM workout_exercises we
+     JOIN workouts w ON w.id = we.workout_id
+     WHERE w.user_id = ? AND we.exercise_id IS NOT NULL
+     GROUP BY we.exercise_id`,
+    [userId]
+  );
+  return new Map((rows as any[]).map((r) => [r.exercise_id, Number(r.times)]));
+}
+
 // The best weighted set per exercise from every workout logged BEFORE the
 // given one, keyed by exercise name - what the summary compares against to
 // award a PR badge. "Best" and "weighted only" follow getPersonalRecords

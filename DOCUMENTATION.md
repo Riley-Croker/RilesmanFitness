@@ -143,12 +143,35 @@ no network calls:
   working twin — so it keeps one working copy per name (1,500 → 1,285).
   It lowercases names, strips the "Step:1" prefixes from instructions,
   and applies `NAME_OVERRIDES` (e.g. ExerciseDB's "cable standing rear
-  delt row (with rope)" is ours as "face pull"). **Edit names there, not
+  delt row (with rope)" is ours as "face pull", and its "barbell standing
+  close-grip military press" is "barbell overhead press"). **Edit names there, not
   in the JSON** — a refresh would undo a hand edit.
 - Body parts come straight from ExerciseDB (upper legs, back, chest, …).
 - Search normalises the query and requires every word to appear in the
-  exercise name, muscles, or equipment, ranking exact/prefix name matches
-  first.
+  exercise name, muscles, or equipment.
+- **Ranking** (search results, filtered lists, and the picker) uses four
+  steps, each only breaking ties in the one before:
+  1. **What you've done most** — how many of your workouts included the
+     exercise (`getExerciseUsage` in [queries.ts](src/lib/queries.ts); four
+     sets in one workout count once). Shown as a lime **"You: 12×"** badge.
+  2. **Popularity tier** — 41 *staples* (bench press, squat, deadlift,
+     pull-up…), 86 *common* variations, then everything else. Hand-curated in
+     [src/data/exercise-popularity.ts](src/data/exercise-popularity.ts): no
+     public data says which exercises people actually do most (the big
+     tracker apps don't publish it, and web signals like search volume can't
+     tell ExerciseDB's very specific names apart), so this is a judgement
+     call you can edit. To re-tier an exercise, move its line; ids come from
+     the exercise page URL.
+  3. **Text match** — exact name, then name starts with the query, then all
+     words in the name, then matched only via muscle or equipment.
+  4. Alphabetical.
+
+  Logged-out visitors (the library is public) get steps 2–4 with no counts.
+  The catalogue lacks a few classics, so their closest real exercise holds
+  the staple slot: barbell glute bridge for hip thrust, and ExerciseDB's
+  barbell standing close-grip military press, renamed "barbell overhead
+  press". `npm run data:exercises`
+  warns if a refresh drops any tiered id.
 - **/exercises** (the Library page) is server-rendered. Filters are a plain
   GET form, so the URL always reflects the current search — shareable and
   bookmarkable. Pagination uses a simple offset cursor.
@@ -412,7 +435,7 @@ ever touch the signed-in user's rows.
 | `POST /api/templates` | Create a template |
 | `GET /api/templates/[id]` | One template |
 | `DELETE /api/templates/[id]` | Delete a template |
-| `GET /api/exercises` | Query the local catalogue: `?search=&bodyPart=&equipment=&muscle=&after=&limit=` |
+| `GET /api/exercises` | Query the local catalogue: `?search=&bodyPart=&equipment=&muscle=&after=&limit=`. Public; when signed in, ranked by your history first with a `timesDone` count |
 | `GET /api/exercises/[id]` | One exercise from the catalogue |
 | `POST /api/settings` | Update preferences: `{ "weightUnit": "lbs" \| "kg" }` |
 | `GET /api/stats/progress` | Time series for one exercise: `?exercise=<name>` |
@@ -455,13 +478,14 @@ RilesmanFitness/
 │   │   ├── progress-charts.tsx # recharts line/bar charts
 │   │   └── delete-button.tsx   # confirm-then-delete
 │   ├── data/
-│   │   └── exercisedb.json     # saved ExerciseDB catalogue (1,285)
+│   │   ├── exercisedb.json     # saved ExerciseDB catalogue (1,285)
+│   │   └── exercise-popularity.ts # hand-curated staple/common tiers for ranking
 │   ├── lib/
 │   │   ├── db.ts               # mysql2 connection pool
 │   │   ├── auth.ts             # NextAuth credentials config
 │   │   ├── actions.ts          # login/register/logout server actions
 │   │   ├── queries.ts          # every SQL query used by pages and APIs
-│   │   ├── exercise-library.ts # local catalogue: browse/filter/search
+│   │   ├── exercise-library.ts # local catalogue: browse/filter/search + ranking
 │   │   ├── muscles.ts          # "muscles worked" scoring for the summary
 │   │   ├── workout-draft.ts    # saves the workout in progress to localStorage
 │   │   ├── duration.ts         # timer clock / summary duration formatting

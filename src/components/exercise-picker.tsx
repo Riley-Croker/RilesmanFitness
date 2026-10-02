@@ -116,12 +116,17 @@ export default function ExercisePicker({
                         className="h-full w-full object-cover"
                       />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate font-medium capitalize">{ex.name}</p>
                       <p className="truncate text-xs capitalize text-zinc-400">
                         {[...ex.bodyParts, ...ex.equipments].join(" · ") || "tap to add"}
                       </p>
                     </div>
+                    {(ex.timesDone ?? 0) > 0 && (
+                      <span className="shrink-0 rounded-full bg-lime-400 px-2 py-0.5 text-xs font-semibold text-zinc-950">
+                        You: {ex.timesDone}×
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}
