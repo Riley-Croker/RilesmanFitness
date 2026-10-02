@@ -442,27 +442,18 @@ export default function WorkoutLogger({
                     className="h-full w-full object-cover"
                   />
                 </div>
+                {/* The name gets the header's full width and wraps up to three
+                    lines before cutting off, as on the summary. Swap and Remove
+                    live in the bottom row with "+ Add set", where they take no
+                    space from it on a phone. */}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold capitalize">{ex.name}</p>
+                  <p className="line-clamp-3 font-semibold capitalize leading-snug">{ex.name}</p>
                   {ex.bodyPart && (
                     <p className="text-xs capitalize text-zinc-400">
                       {ex.bodyPart}{ex.equipment ? ` · ${ex.equipment}` : ""}
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => openSwap(exIdx)}
-                  className="text-sm text-zinc-400 hover:text-lime-400"
-                  aria-label={`Swap ${ex.name} for a similar exercise`}
-                >
-                  ⇄ Swap
-                </button>
-                <button
-                  onClick={() => removeExercise(exIdx)}
-                  className="text-sm text-zinc-500 hover:text-red-400"
-                >
-                  Remove
-                </button>
               </div>
 
               {/* Sets table */}
@@ -482,12 +473,29 @@ export default function WorkoutLogger({
                   />
                 ))}
               </div>
-              <button
-                onClick={() => addSet(exIdx)}
-                className="mt-3 text-sm font-medium text-lime-400 hover:underline"
-              >
-                + Add set
-              </button>
+              {/* Card actions. Padding gives each a thumb-sized tap target; the
+                  negative margin keeps the row's visual spacing unchanged. */}
+              <div className="-mx-2 mt-2 flex items-center gap-1 text-sm">
+                <button
+                  onClick={() => addSet(exIdx)}
+                  className="rounded-md px-2 py-1.5 font-medium text-lime-400 hover:bg-lime-400/10"
+                >
+                  + Add set
+                </button>
+                <button
+                  onClick={() => openSwap(exIdx)}
+                  className="ml-auto rounded-md px-2 py-1.5 text-zinc-300 hover:bg-zinc-800 hover:text-lime-400"
+                  aria-label={`Swap ${ex.name} for a similar exercise`}
+                >
+                  ⇄ Swap
+                </button>
+                <button
+                  onClick={() => removeExercise(exIdx)}
+                  className="rounded-md px-2 py-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))}
         </div>
