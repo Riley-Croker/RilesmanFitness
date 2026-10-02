@@ -10,17 +10,6 @@ locally; only the GIFs load from ExerciseDB).
 12-module Next.js/TypeScript course for C#/.NET developers, taught
 through this app's own code.
 
-## Quick start
-
-```powershell
-npm install       # once
-npm run db:init   # once — creates the rilesman_fitness MySQL database
-npm run dev       # start → http://localhost:3000/workout
-```
-
-Requires Node.js and a MySQL/MariaDB server on localhost:3306
-(connection settings in `.env`).
-
 ## Features
 
 - Email/password accounts (bcrypt-hashed, stored in your local database)
