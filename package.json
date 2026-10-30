@@ -18,7 +18,7 @@
     "bcryptjs": "^3.0.2",
     "modern-screenshot": "^4.7.0",
     "mysql2": "^3.23.4",
-    "next": "16.3.8",
+    "next": "16.4.3",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -31,7 +31,7 @@
     "@types/react-dom": "^19",
     "dotenv": "^17.2.4",
     "eslint": "^9",
-    "eslint-config-next": "16.3.8",
+    "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
