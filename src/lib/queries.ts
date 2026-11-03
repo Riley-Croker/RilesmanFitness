@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { DEFAULT_UNIT, type WeightUnit } from "@/lib/units";
+import { HISTORY_SESSIONS, type ExerciseHistory } from "@/lib/exercise-history";
 import type {
   PersonalRecord,
   ProgressPoint,
@@ -286,6 +287,107 @@ export async function getDashboardStats(userId: string) {
     volumeThisWeek: Number(r.volumeThisWeek),
     totalSets: Number(r.totalSets),
   };
+}
+
+// The last few sessions and all-time best set of several exercises at once,
+// for the workout logger (see src/lib/exercise-history.ts). `keys` come from
+// historyKey(): "id:<exerciseId>" for catalogue exercises, "name:<lowercase
+// name>" for custom ones. Every key asked for gets an entry, empty if never
+// logged, so the browser can tell "nothing yet" from "still loading".
+export async function getRecentExerciseHistory(
+  userId: string,
+  keys: string[]
+): Promise<Record<string, ExerciseHistory>> {
+  const result: Record<string, ExerciseHistory> = {};
+  const ids: string[] = [];
+  const names: string[] = [];
+  for (const key of keys) {
+    result[key] = { sessions: [], best: null };
+    if (key.startsWith("id:")) ids.push(key.slice(3));
+    else if (key.startsWith("name:")) names.push(key.slice(5));
+  }
+  if (ids.length === 0 && names.length === 0) return result;
+
+  // The same key expression the client builds, computed per row in SQL.
+  // Names compare case-insensitively under the table's default collation.
+  const keyExpr = `CASE WHEN we.exercise_id IS NOT NULL THEN CONCAT('id:', we.exercise_id)
+                        ELSE CONCAT('name:', LOWER(TRIM(we.name))) END`;
+  const filters: string[] = [];
+  if (ids.length) filters.push(`we.exercise_id IN (${ids.map(() => "?").join(", ")})`);
+  if (names.length) {
+    filters.push(`(we.exercise_id IS NULL AND TRIM(we.name) IN (${names.map(() => "?").join(", ")}))`);
+  }
+  const where = `w.user_id = ? AND (${filters.join(" OR ")})`;
+  const params = [userId, ...ids, ...names];
+
+  // Sessions: number each exercise's workouts newest first and keep the top
+  // few. DENSE_RANK over the workout gives an exercise logged twice in one
+  // workout the same number, so it still counts as one session. Exercises
+  // whose sets were all left empty (and so not saved) are skipped.
+  const [sessionRows] = await db.execute(
+    `SELECT r.k, r.workoutId, r.workoutName, r.date, s.reps, s.weight
+     FROM (
+       SELECT ${keyExpr} AS k, we.id AS weId, we.sort_order AS exOrder,
+              w.id AS workoutId, w.name AS workoutName, w.date, w.created_at,
+              DENSE_RANK() OVER (
+                PARTITION BY ${keyExpr}
+                ORDER BY w.date DESC, w.created_at DESC, w.id
+              ) AS rk
+       FROM workout_exercises we
+       JOIN workouts w ON w.id = we.workout_id
+       WHERE ${where}
+         AND EXISTS (SELECT 1 FROM sets x WHERE x.workout_exercise_id = we.id)
+     ) r
+     JOIN sets s ON s.workout_exercise_id = r.weId
+     WHERE r.rk <= ?
+     ORDER BY r.k, r.date DESC, r.created_at DESC, r.workoutId, r.exOrder, s.sort_order`,
+    [...params, HISTORY_SESSIONS]
+  );
+  for (const r of sessionRows as any[]) {
+    const entry = result[r.k];
+    if (!entry) continue;
+    let session = entry.sessions[entry.sessions.length - 1];
+    if (session?.workoutId !== r.workoutId) {
+      session = {
+        workoutId: r.workoutId,
+        workoutName: r.workoutName,
+        date: new Date(r.date).toISOString(),
+        sets: [],
+      };
+      entry.sessions.push(session);
+    }
+    session.sets.push({ reps: Number(r.reps), weight: Number(r.weight) });
+  }
+
+  // All-time best: heaviest set, then most reps, earliest on a tie (the
+  // day the record was first set).
+  const [bestRows] = await db.execute(
+    `SELECT k, reps, weight, date, workoutId FROM (
+       SELECT ${keyExpr} AS k, s.reps, s.weight, w.date, w.id AS workoutId,
+              ROW_NUMBER() OVER (
+                PARTITION BY ${keyExpr}
+                ORDER BY s.weight DESC, s.reps DESC, w.date
+              ) AS rn
+       FROM sets s
+       JOIN workout_exercises we ON we.id = s.workout_exercise_id
+       JOIN workouts w ON w.id = we.workout_id
+       WHERE ${where}
+     ) b
+     WHERE rn = 1`,
+    params
+  );
+  for (const r of bestRows as any[]) {
+    const entry = result[r.k];
+    if (!entry) continue;
+    entry.best = {
+      reps: Number(r.reps),
+      weight: Number(r.weight),
+      date: new Date(r.date).toISOString(),
+      workoutId: r.workoutId,
+    };
+  }
+
+  return result;
 }
 
 // Recent history of one exercise (by ExerciseDB id) for the detail page.

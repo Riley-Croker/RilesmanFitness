@@ -6,14 +6,25 @@ import { getLoggedExerciseNames, getWeightUnit } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProgressPage() {
+// ?exercise=<name> opens on that exercise (the logger's history sheet links
+// here); otherwise, or if you've never logged it, the first one.
+export default async function ProgressPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ exercise?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [exerciseNames, unit] = await Promise.all([
+  const [exerciseNames, unit, { exercise }] = await Promise.all([
     getLoggedExerciseNames(session.user.id),
     getWeightUnit(session.user.id),
+    searchParams,
   ]);
+  // Logged names can differ in case from the link (custom exercises).
+  const initialExercise = exercise
+    ? exerciseNames.find((n) => n.toLowerCase() === exercise.toLowerCase())
+    : undefined;
 
   return (
     <div>
@@ -21,7 +32,7 @@ export default async function ProgressPage() {
       <p className="mt-1 text-zinc-400">
         Pick an exercise to see your strength and volume trends. Est. 1RM uses the Epley formula.
       </p>
-      <ProgressCharts exerciseNames={exerciseNames} weightUnit={unit} />
+      <ProgressCharts exerciseNames={exerciseNames} initialExercise={initialExercise} weightUnit={unit} />
     </div>
   );
 }

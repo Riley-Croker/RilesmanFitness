@@ -65,7 +65,9 @@ export default async function NewWorkoutPage({
         equipment: ex.equipments[0] ?? null,
         targetMuscle: ex.targetMuscles[0] ?? null,
         images: ex.images,
-        sets: [{ reps: 10, weight: 0 }],
+        // Empty, like an exercise added in the logger: the boxes then show
+        // last time's numbers as hints.
+        sets: [{ reps: 0, weight: 0 }],
       });
     }
   }

@@ -15,6 +15,8 @@ through this app's own code.
 - Email/password accounts (bcrypt-hashed, stored in your local database)
 - Workout logger with an animated-thumbnail exercise picker, a live
   Start/Finish timer, and a workout in progress that survives reloads
+- Your history while you log: last session's sets on each exercise, grey
+  hints in empty boxes, and a tap-to-open sheet of your last 5 sessions and PR
 - Post-workout summary: time, best set per exercise with PR badges, and a
   muscles-worked body map, saveable as an image for your phone's photos
 - Exercise library: fuzzy search + filters by body part, equipment, muscle;

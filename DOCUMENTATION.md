@@ -293,13 +293,36 @@ Then:
    part, or type a custom exercise name for anything not in the catalogue).
 3. Each exercise gets a set table — reps and weight per set in your
    preferred unit (lbs by default); leave weight blank/0 for bodyweight
-   movements.
+   movements. A new exercise starts with one empty set. Sets left without
+   reps aren't saved, and Save warns you before dropping them.
 4. **Finish** / **Save Workout** POSTs the whole structure to
    `/api/workouts`, which writes one `workouts` row, one `workout_exercises`
    row per exercise, and one `sets` row per set, then opens the workout's
    summary (4.5).
 5. **Save as template** instead stores the exercise list (with set/rep
    targets taken from what you entered) as a reusable routine.
+
+**Your history, mid-workout.** Three layers, from no taps to one:
+- Each card shows **Last 10/28: 135 × 8 · 135 × 8 · 145 × 6**, your most
+  recent session of that exercise.
+- Empty reps and weight boxes show that session's matching set as **grey
+  placeholder text** (set 1 shows last time's set 1; extra sets show its
+  final set). It's only a hint: nothing is saved unless you type it.
+- Tapping the exercise's name or picture opens a **history sheet**
+  ([exercise-history-sheet.tsx](src/components/exercise-history-sheet.tsx)):
+  the GIF, your best set ever (PR), and your last 5 sessions with each one's
+  best set outlined, plus links to the progress chart (opened on that
+  exercise via `/progress?exercise=`) and the exercise's page. Leaving to
+  follow them is safe; the workout in progress is saved in the browser.
+
+The logger loads all of this with one request,
+`GET /api/stats/exercise-history`, covering every exercise on screen, and
+again for each one added or swapped in (`getRecentExerciseHistory` in
+[queries.ts](src/lib/queries.ts)). Catalogue exercises match their history
+by ExerciseDB id; custom exercises by name, ignoring case
+(`historyKey` in [exercise-history.ts](src/lib/exercise-history.ts)). An
+exercise logged twice in one workout counts as one session. Templates
+pre-fill reps, so for them only the weight boxes show hints.
 
 **Swapping.** Each exercise has **⇄ Swap** for when the equipment is taken.
 It opens a sheet of substitutes
@@ -465,6 +488,7 @@ ever touch the signed-in user's rows.
 | `GET /api/exercises/[id]/substitutes` | Exercises that can replace this one, for the logger's Swap button: `?equipment=` to filter. Returns the equipment chips too. Public; ranked by your history when signed in |
 | `POST /api/settings` | Update preferences: `{ "weightUnit": "lbs" \| "kg" }` |
 | `GET /api/stats/progress` | Time series for one exercise: `?exercise=<name>` |
+| `GET /api/stats/exercise-history` | For the logger: last 5 sessions and best set ever per exercise. `?key=id:<exerciseId>&key=name:<custom name>` (repeat `key`, up to 40). Returns `{ [key]: { sessions, best } }`, weights in lbs |
 | `GET|POST /api/auth/*` | NextAuth internals (login, session, logout) |
 
 ## 7. Project structure
@@ -499,6 +523,7 @@ RilesmanFitness/
 │   │   ├── workout-logger-loader.tsx # renders the logger browser-only (localStorage draft)
 │   │   ├── exercise-reorder-list.tsx # drag-to-reorder mode for the logger (dnd-kit)
 │   │   ├── substitute-picker.tsx # the logger's Swap sheet (similar exercises)
+│   │   ├── exercise-history-sheet.tsx # the logger's history sheet (tap an exercise)
 │   │   ├── body-map.tsx        # front/back muscle map on the summary
 │   │   ├── body-map-data.ts    # its polygon outlines (MIT, see file header)
 │   │   ├── save-image-button.tsx # summary card → PNG → share sheet / download
@@ -515,6 +540,7 @@ RilesmanFitness/
 │   │   ├── exercise-library.ts # local catalogue: browse/filter/search + ranking
 │   │   ├── muscles.ts          # "muscles worked" scoring for the summary
 │   │   ├── workout-draft.ts    # saves the workout in progress to localStorage
+│   │   ├── exercise-history.ts # types/helpers for the logger's "last time" + history sheet
 │   │   ├── duration.ts         # timer clock / summary duration formatting
 │   │   ├── units.ts            # lbs ↔ kg conversion (storage is always lbs)
 │   │   └── base-path.ts        # the /workout prefix and withBasePath()

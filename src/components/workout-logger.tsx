@@ -15,15 +15,17 @@
 // so a reload or a discarded tab resumes it, timer included. That's also why
 // this component is rendered browser-only (workout-logger-loader.tsx).
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import ExerciseHistorySheet from "@/components/exercise-history-sheet";
 import ExerciseImage from "@/components/exercise-image";
 import ExercisePicker from "@/components/exercise-picker";
 import SubstitutePicker from "@/components/substitute-picker";
 import type { ReorderItem } from "@/components/exercise-reorder-list";
 import { withBasePath } from "@/lib/base-path";
 import { formatClock } from "@/lib/duration";
+import { formatSet, historyKey, shortDate, type ExerciseHistory } from "@/lib/exercise-history";
 import { toDisplayWeight, toStoredLbs, type WeightUnit } from "@/lib/units";
 import { clearDraft, loadDraft, saveDraft, type DraftExercise, type WorkoutDraft } from "@/lib/workout-draft";
 import type { Exercise } from "@/types";
@@ -100,6 +102,12 @@ export default function WorkoutLogger({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templateSaved, setTemplateSaved] = useState(false);
+  // Your past sessions of each exercise on screen, by historyKey(): drives
+  // the "Last" line, the grey hints in empty boxes and the history sheet.
+  // A key that's missing is still loading.
+  const [history, setHistory] = useState<Record<string, ExerciseHistory | "error">>({});
+  const [historyUid, setHistoryUid] = useState<string | null>(null); // whose sheet is open
+  const requestedHistory = useRef(new Set<string>());
 
   // Set once the workout is saved or discarded, so the persistence effect
   // below can't write it back to storage on the way out.
@@ -130,6 +138,36 @@ export default function WorkoutLogger({
     return () => clearInterval(timer);
   }, [startedAt]);
 
+  // Load history for exercises we haven't asked about yet: all of them on
+  // first render, then each one added or swapped in. One request covers
+  // every new exercise. Joining the keys into a string gives the effect a
+  // dependency that only changes when the set of exercises does, not on
+  // every keystroke in a set box.
+  const historyKeys = [...new Set(exercises.map(historyKey))].join("\n");
+  useEffect(() => {
+    const missing = historyKeys.split("\n").filter((k) => k && !requestedHistory.current.has(k));
+    if (missing.length === 0) return;
+    missing.forEach((k) => requestedHistory.current.add(k));
+    const qs = missing.map((k) => `key=${encodeURIComponent(k)}`).join("&");
+    fetch(withBasePath(`/api/stats/exercise-history?${qs}`))
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json() as Promise<Record<string, ExerciseHistory>>;
+      })
+      .then((data) => setHistory((prev) => ({ ...prev, ...data })))
+      .catch(() => {
+        // Show the error, and let the next change of exercises try again.
+        missing.forEach((k) => requestedHistory.current.delete(k));
+        setHistory((prev) => ({ ...prev, ...Object.fromEntries(missing.map((k) => [k, "error" as const])) }));
+      });
+  }, [historyKeys]);
+
+  // The most recent session of an exercise, or null if none (or not loaded).
+  const lastSession = (ex: LoggerExercise) => {
+    const h = history[historyKey(ex)];
+    return h && h !== "error" ? (h.sessions[0] ?? null) : null;
+  };
+
   const timed = startedAt !== null;
 
   const start = () => {
@@ -158,7 +196,9 @@ export default function WorkoutLogger({
         equipment: ex.equipments[0] ?? null,
         targetMuscle: ex.targetMuscles[0] ?? null,
         images: ex.images,
-        sets: [{ reps: 10, weight: 0 }],
+        // Starts empty, so the boxes show last time's numbers as grey hints
+        // (see SetRow). Sets left without reps aren't saved; save() warns.
+        sets: [{ reps: 0, weight: 0 }],
       },
     ]);
     setPickerOpen(false);
@@ -177,7 +217,7 @@ export default function WorkoutLogger({
   const addSet = (exIdx: number) => {
     setExercises((prev) =>
       prev.map((ex, i) =>
-        i !== exIdx ? ex : { ...ex, sets: [...ex.sets, ex.sets[ex.sets.length - 1] ?? { reps: 10, weight: 0 }] }
+        i !== exIdx ? ex : { ...ex, sets: [...ex.sets, ex.sets[ex.sets.length - 1] ?? { reps: 0, weight: 0 }] }
       )
     );
   };
@@ -210,7 +250,7 @@ export default function WorkoutLogger({
               images: ex.images,
               sets: old.sets.length
                 ? old.sets.map((s) => ({ reps: s.reps, weight: 0 }))
-                : [{ reps: 10, weight: 0 }],
+                : [{ reps: 0, weight: 0 }],
             }
       )
     );
@@ -242,6 +282,17 @@ export default function WorkoutLogger({
         : "");
     if (!finalName) return setError("Give your workout a name.");
     if (exercises.length === 0) return setError("Add at least one exercise.");
+    // A box showing a grey hint is still empty, and the server drops sets
+    // without reps - say so rather than lose them quietly.
+    const emptySets = exercises.reduce((n, ex) => n + ex.sets.filter((s) => !(s.reps > 0)).length, 0);
+    if (
+      emptySets > 0 &&
+      !window.confirm(
+        `${emptySets === 1 ? "1 set has" : `${emptySets} sets have`} no reps typed in and won't be saved. Save anyway?`
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     try {
       // Inputs are in the user's display unit — store canonical lbs.
@@ -431,30 +482,55 @@ export default function WorkoutLogger({
       ) : (
         <>
         <div className={`${exercises.length >= 2 ? "mt-3" : "mt-6"} flex flex-col gap-4`}>
-          {exercises.map((ex, exIdx) => (
+          {exercises.map((ex, exIdx) => {
+            const last = lastSession(ex);
+            return (
             <div key={ex.uid} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-white">
+              {/* The whole header is one button that opens this exercise's
+                  history. The name gets its full width and wraps up to three
+                  lines before cutting off, as on the summary; Swap and Remove
+                  live in the bottom row with "+ Add set". The negative margin
+                  lets the hover background reach past the text without moving it. */}
+              <button
+                type="button"
+                onClick={() => setHistoryUid(ex.uid)}
+                aria-haspopup="dialog"
+                className="-m-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-zinc-800/60"
+              >
+                <span className="block h-12 w-12 shrink-0 overflow-hidden rounded-md bg-white">
                   <ExerciseImage
                     images={ex.images ?? []}
-                    alt={ex.name}
+                    alt=""
                     animate={false}
                     className="h-full w-full object-cover"
                   />
-                </div>
-                {/* The name gets the header's full width and wraps up to three
-                    lines before cutting off, as on the summary. Swap and Remove
-                    live in the bottom row with "+ Add set", where they take no
-                    space from it on a phone. */}
-                <div className="min-w-0 flex-1">
-                  <p className="line-clamp-3 font-semibold capitalize leading-snug">{ex.name}</p>
+                </span>
+                <span className="block min-w-0 flex-1">
+                  <span className="line-clamp-3 font-semibold capitalize leading-snug">{ex.name}</span>
                   {ex.bodyPart && (
-                    <p className="text-xs capitalize text-zinc-400">
+                    <span className="block text-xs capitalize text-zinc-400">
                       {ex.bodyPart}{ex.equipment ? ` · ${ex.equipment}` : ""}
-                    </p>
+                    </span>
                   )}
-                </div>
-              </div>
+                  {/* Last time, with no tap needed. */}
+                  {last && (
+                    <span className="mt-0.5 block text-xs tabular-nums text-zinc-400">
+                      <span className="text-zinc-500">Last {shortDate(last.date)}:</span>{" "}
+                      {/* Each set stays on one line; wrapping happens between them. */}
+                      {last.sets.map((s, i) => (
+                        <Fragment key={i}>
+                          {i > 0 && " · "}
+                          <span className="whitespace-nowrap">{formatSet(s, weightUnit)}</span>
+                        </Fragment>
+                      ))}
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-xl leading-none text-zinc-600" aria-hidden>
+                  ›
+                </span>
+                <span className="sr-only">Show your history</span>
+              </button>
 
               {/* Sets table */}
               <div className="mt-3 grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2 text-sm">
@@ -468,6 +544,9 @@ export default function WorkoutLogger({
                     index={setIdx}
                     reps={set.reps}
                     weight={set.weight}
+                    // Last time's same set (or its final set, for extra ones).
+                    hint={last ? (last.sets[setIdx] ?? last.sets[last.sets.length - 1]) : undefined}
+                    weightUnit={weightUnit}
                     onChange={(field, value) => updateSet(exIdx, setIdx, field, value)}
                     onRemove={() => removeSet(exIdx, setIdx)}
                   />
@@ -497,7 +576,8 @@ export default function WorkoutLogger({
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <button
@@ -570,25 +650,43 @@ export default function WorkoutLogger({
           onClose={() => setSwapIdx(null)}
         />
       )}
+      {(() => {
+        const ex = exercises.find((e) => e.uid === historyUid);
+        return ex ? (
+          <ExerciseHistorySheet
+            exercise={ex}
+            history={history[historyKey(ex)]}
+            weightUnit={weightUnit}
+            onClose={() => setHistoryUid(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
 
+// One set's row. `hint` is the matching set from last time: while a box is
+// empty it shows that number in grey as a placeholder. It's only a hint -
+// nothing is filled in or saved unless you type it.
 function SetRow({
   index,
   reps,
   weight,
+  hint,
+  weightUnit,
   onChange,
   onRemove,
 }: {
   index: number;
   reps: number;
   weight: number;
+  hint?: { reps: number; weight: number };
+  weightUnit: WeightUnit;
   onChange: (field: "reps" | "weight", value: number) => void;
   onRemove: () => void;
 }) {
   const cell =
-    "w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center outline-none focus:border-lime-400";
+    "w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center outline-none placeholder:text-zinc-500 focus:border-lime-400";
   return (
     <>
       <span className="text-center text-zinc-500">{index + 1}</span>
@@ -596,6 +694,8 @@ function SetRow({
         type="number"
         min={0}
         value={reps || ""}
+        placeholder={hint ? String(hint.reps) : undefined}
+        aria-label={`Set ${index + 1} reps`}
         onChange={(e) => onChange("reps", Number(e.target.value))}
         className={cell}
       />
@@ -604,7 +704,8 @@ function SetRow({
         min={0}
         step={0.5}
         value={weight || ""}
-        placeholder="BW"
+        placeholder={hint && hint.weight > 0 ? String(toDisplayWeight(hint.weight, weightUnit)) : "BW"}
+        aria-label={`Set ${index + 1} weight`}
         onChange={(e) => onChange("weight", Number(e.target.value))}
         className={cell}
       />
