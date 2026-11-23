@@ -50,11 +50,15 @@ export default async function WorkoutSummaryPage({
   ]);
   if (!workout) notFound();
 
+  // Set counts (per exercise, in total, and for the muscle map) are working
+  // sets: warm-ups would inflate them. Volume below still counts every set.
+  const workingSets = (e: (typeof workout.exercises)[number]) => e.sets.filter((s) => !s.isWarmup).length;
+
   const muscles = await getMusclesWorked(
     workout.exercises.map((e) => ({
       exerciseId: e.exerciseId,
       targetMuscle: e.targetMuscle,
-      setCount: e.sets.length,
+      setCount: workingSets(e),
     }))
   );
   const topGroups = muscles.groups.slice(0, 5);
@@ -70,10 +74,10 @@ export default async function WorkoutSummaryPage({
       best.weight > 0 &&
       !!prev &&
       (best.weight > prev.weight || (best.weight === prev.weight && best.reps > prev.reps));
-    return { ex, best, isPR };
+    return { ex, best, isPR, setCount: workingSets(ex) };
   });
 
-  const totalSets = workout.exercises.reduce((n, e) => n + e.sets.length, 0);
+  const totalSets = workout.exercises.reduce((n, e) => n + workingSets(e), 0);
   const totalVolume = workout.exercises
     .flatMap((e) => e.sets)
     .reduce((sum, s) => sum + s.reps * s.weight, 0);
@@ -161,7 +165,7 @@ export default async function WorkoutSummaryPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ ex, best, isPR }) => (
+            {rows.map(({ ex, best, isPR, setCount }) => (
               <tr key={ex.id} className="border-b border-zinc-900">
                 {/* w-full: this column takes whatever the others leave.
                     Names wrap up to three lines before being cut off. On a
@@ -171,7 +175,7 @@ export default async function WorkoutSummaryPage({
                 <td className="w-full py-1.5">
                   <span className="line-clamp-3 font-medium capitalize leading-snug">{ex.name}</span>
                 </td>
-                <td className="py-1.5 pl-3 text-right tabular-nums text-zinc-400">{ex.sets.length}</td>
+                <td className="py-1.5 pl-3 text-right tabular-nums text-zinc-400">{setCount}</td>
                 <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums">
                   {isPR && (
                     <span className="mr-1.5 rounded bg-lime-400 px-1 py-px text-[10px] font-bold text-zinc-950">

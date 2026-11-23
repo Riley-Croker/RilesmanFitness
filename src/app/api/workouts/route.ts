@@ -88,11 +88,21 @@ export async function POST(request: NextRequest) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [exId, workoutId, ex.exerciseId || null, ex.name, ex.bodyPart || null, ex.equipment || null, ex.targetMuscle || null, i]
     );
+    // Sets without reps are dropped: that's how a planned set from a
+    // template that wasn't done (its boxes left showing only the grey
+    // target) stays out of your history.
     const sets = (ex.sets || []).filter((s) => s.reps > 0);
     for (let j = 0; j < sets.length; j++) {
       await db.execute(
-        "INSERT INTO sets (id, workout_exercise_id, reps, weight, sort_order) VALUES (?, ?, ?, ?, ?)",
-        [crypto.randomUUID(), exId, Math.floor(sets[j].reps), Math.max(0, sets[j].weight || 0), j]
+        "INSERT INTO sets (id, workout_exercise_id, reps, weight, is_warmup, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          crypto.randomUUID(),
+          exId,
+          Math.floor(sets[j].reps),
+          Math.max(0, sets[j].weight || 0),
+          sets[j].isWarmup ? 1 : 0,
+          j,
+        ]
       );
     }
   }

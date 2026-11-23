@@ -104,9 +104,16 @@ export default function ExerciseHistorySheet({
                             className={`flex items-center gap-1 rounded-md px-2 py-0.5 ${
                               i === bestIdx
                                 ? "border border-lime-400/60 font-semibold text-lime-300"
-                                : "border border-zinc-800 text-zinc-300"
+                                : set.isWarmup
+                                  ? "border border-zinc-800 text-zinc-500"
+                                  : "border border-zinc-800 text-zinc-300"
                             }`}
                           >
+                            {set.isWarmup && (
+                              <span className="text-[10px] font-bold text-amber-400/80" title="Warm-up">
+                                W
+                              </span>
+                            )}
                             {formatSet(set, weightUnit)}
                             {i === prIdx && (
                               <span className="rounded bg-lime-400 px-1 text-[10px] font-bold text-zinc-950">PR</span>

@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import WorkoutLogger from "@/components/workout-logger-loader";
 import { getExercise } from "@/lib/exercise-library";
 import { getTemplate, getWeightUnit } from "@/lib/queries";
+import type { DraftExercise } from "@/lib/workout-draft";
 
 export const dynamic = "force-dynamic";
 
@@ -24,21 +25,14 @@ export default async function NewWorkoutPage({
   const unit = await getWeightUnit(session.user.id);
 
   let initialName = "";
-  interface Seeded {
-    exerciseId: string | null;
-    name: string;
-    bodyPart: string | null;
-    equipment: string | null;
-    targetMuscle: string | null;
-    images?: string[];
-    sets: { reps: number; weight: number }[];
-  }
-  const initialExercises: Seeded[] = [];
+  let initialPlan: string | null = null;
+  const initialExercises: DraftExercise[] = [];
 
   if (templateId) {
     const template = await getTemplate(session.user.id, templateId);
     if (template) {
       initialName = template.name;
+      initialPlan = template.description?.trim() || null;
       for (const ex of template.exercises) {
         const full = ex.exerciseId ? await getExercise(ex.exerciseId) : null;
         initialExercises.push({
@@ -48,10 +42,21 @@ export default async function NewWorkoutPage({
           equipment: ex.equipment,
           targetMuscle: ex.targetMuscle,
           images: full?.images,
-          sets: Array.from({ length: ex.targetSets }, () => ({
-            reps: ex.targetReps,
-            weight: 0,
-          })),
+          notes: ex.notes,
+          isOptional: ex.isOptional,
+          sets: ex.sets.length
+            ? // Planned sets: one row each, left EMPTY with the plan as its
+              // target. The server drops sets without reps, so a planned set
+              // you skip is never saved as done; pre-filling would break that.
+              ex.sets.map((s) => ({
+                reps: 0,
+                weight: 0,
+                isWarmup: s.isWarmup,
+                target: { reps: s.reps, weight: s.weight },
+              }))
+            : // Older templates without planned sets: as before, N sets with
+              // the target reps filled in.
+              Array.from({ length: ex.targetSets }, () => ({ reps: ex.targetReps, weight: 0 })),
         });
       }
     }
@@ -78,6 +83,7 @@ export default async function NewWorkoutPage({
       <WorkoutLogger
         userId={session.user.id}
         initialName={initialName}
+        initialPlan={initialPlan}
         initialExercises={initialExercises}
         weightUnit={unit}
       />

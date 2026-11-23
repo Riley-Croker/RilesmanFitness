@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS rilesman_fitness.sets (
   workout_exercise_id VARCHAR(36) NOT NULL,
   reps                INT NOT NULL,
   weight              DECIMAL(6, 2) NOT NULL DEFAULT 0,
+  -- 1 for a warm-up set (shown as "W" in the logger), 0 for a working set.
+  is_warmup           TINYINT(1) NOT NULL DEFAULT 0,
   sort_order          INT NOT NULL DEFAULT 0,
   created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (workout_exercise_id)
@@ -111,6 +113,25 @@ CREATE TABLE IF NOT EXISTS rilesman_fitness.template_exercises (
   target_muscle VARCHAR(100),
   target_sets   INT NOT NULL DEFAULT 3,
   target_reps   INT NOT NULL DEFAULT 10,
+  -- A short cue shown under the exercise in the logger.
+  notes         VARCHAR(500) NULL,
+  -- 1 = optional (dropped first when short on time); 0 = priority.
+  is_optional   TINYINT(1) NOT NULL DEFAULT 0,
   sort_order    INT NOT NULL DEFAULT 0,
   FOREIGN KEY (template_id) REFERENCES rilesman_fitness.templates(id) ON DELETE CASCADE
+);
+
+-- The planned sets of a template exercise, one row each: target reps and
+-- weight (lbs, like sets.weight; 0 = bodyweight or unspecified), warm-up or
+-- working. The logger shows them as hints in empty boxes. A template exercise
+-- with no rows here falls back to target_sets x target_reps.
+CREATE TABLE IF NOT EXISTS rilesman_fitness.template_sets (
+  id                   VARCHAR(36) PRIMARY KEY,
+  template_exercise_id VARCHAR(36) NOT NULL,
+  sort_order           INT NOT NULL DEFAULT 0,
+  reps                 INT NOT NULL,
+  weight               DECIMAL(6, 2) NOT NULL DEFAULT 0,
+  is_warmup            TINYINT(1) NOT NULL DEFAULT 0,
+  FOREIGN KEY (template_exercise_id)
+    REFERENCES rilesman_fitness.template_exercises(id) ON DELETE CASCADE
 );

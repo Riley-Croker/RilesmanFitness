@@ -106,9 +106,18 @@ export default async function WorkoutDetailPage({
                 </tr>
               </thead>
               <tbody>
+                {/* Working sets are numbered; warm-ups show "W", as in the logger. */}
                 {ex.sets.map((s, i) => (
-                  <tr key={s.id} className="border-t border-zinc-800/60">
-                    <td className="py-1.5 text-zinc-500">{i + 1}</td>
+                  <tr key={s.id} className={`border-t border-zinc-800/60 ${s.isWarmup ? "text-zinc-400" : ""}`}>
+                    <td className="py-1.5 text-zinc-500">
+                      {s.isWarmup ? (
+                        <span className="text-xs font-bold text-amber-400" title="Warm-up">
+                          W
+                        </span>
+                      ) : (
+                        ex.sets.slice(0, i + 1).filter((x) => !x.isWarmup).length
+                      )}
+                    </td>
                     <td className="py-1.5">{s.reps}</td>
                     <td className="py-1.5 font-medium">
                       {s.weight > 0 ? toDisplayWeight(s.weight, unit) : "Bodyweight"}

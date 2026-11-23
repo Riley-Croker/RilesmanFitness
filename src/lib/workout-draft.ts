@@ -9,14 +9,27 @@
 // works without persistence, as it did before.
 
 import type { WeightUnit } from "@/lib/units";
-import type { WorkoutExerciseInput } from "@/types";
+import type { SetInput, WorkoutExerciseInput } from "@/types";
 
+// A set row in the logger. reps/weight are what you typed (weight in your
+// display unit); `target` is the template's plan for it, shown as the grey
+// hint while the boxes are empty. Target weight stays in lbs, so flipping
+// the lbs/kg toggle never needs to convert it.
+export interface DraftSet extends SetInput {
+  target?: { reps: number; weight: number };
+}
+
+// The optional fields here were added over time; drafts saved before them
+// just lack them, which reads as "no target / no note / priority".
 export interface DraftExercise extends WorkoutExerciseInput {
   images?: string[];
   // Stable client-side id so the logger can tell exercises apart when they
   // are reordered. Optional because drafts saved before reordering existed
   // don't have one; the logger fills in any that are missing.
   uid?: string;
+  sets: DraftSet[];
+  notes?: string | null; // the template's cue for this exercise
+  isOptional?: boolean;
 }
 
 export interface WorkoutDraft {
@@ -24,6 +37,8 @@ export interface WorkoutDraft {
   name: string;
   date: string; // YYYY-MM-DD, used only when the workout isn't timed
   notes: string;
+  // The template's description (the day's plan), when started from one.
+  plan?: string | null;
   exercises: DraftExercise[];
   startedAt: number | null; // epoch ms when Start was pressed
   unit: WeightUnit; // unit the set weights were typed in

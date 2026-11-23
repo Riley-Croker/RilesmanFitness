@@ -27,7 +27,14 @@ import { withBasePath } from "@/lib/base-path";
 import { formatClock } from "@/lib/duration";
 import { formatSet, historyKey, shortDate, type ExerciseHistory } from "@/lib/exercise-history";
 import { toDisplayWeight, toStoredLbs, type WeightUnit } from "@/lib/units";
-import { clearDraft, loadDraft, saveDraft, type DraftExercise, type WorkoutDraft } from "@/lib/workout-draft";
+import {
+  clearDraft,
+  loadDraft,
+  saveDraft,
+  type DraftExercise,
+  type DraftSet,
+  type WorkoutDraft,
+} from "@/lib/workout-draft";
 import type { Exercise } from "@/types";
 
 // Reorder mode pulls in the drag-and-drop library, so it's loaded only when
@@ -67,11 +74,13 @@ function restore(userId: string, unit: WeightUnit): WorkoutDraft | null {
 export default function WorkoutLogger({
   userId,
   initialName = "",
+  initialPlan = null,
   initialExercises = [],
   weightUnit = "lbs",
 }: {
   userId: string;
   initialName?: string;
+  initialPlan?: string | null; // the template's description
   initialExercises?: DraftExercise[];
   weightUnit?: WeightUnit;
 }) {
@@ -84,6 +93,9 @@ export default function WorkoutLogger({
   const [name, setName] = useState(restored?.name ?? initialName);
   const [date, setDate] = useState(restored?.date ?? today());
   const [notes, setNotes] = useState(restored?.notes ?? "");
+  // The day's plan from the template. A resumed workout keeps its own (or
+  // none), like everything else in the draft.
+  const [plan] = useState(() => (restored ? (restored.plan ?? null) : initialPlan));
   // Lazy, so the uids are generated once rather than on every render.
   // Drafts saved before reordering existed get theirs here.
   const [exercises, setExercises] = useState<LoggerExercise[]>(() =>
@@ -126,8 +138,8 @@ export default function WorkoutLogger({
       clearDraft(userId);
       return;
     }
-    saveDraft(userId, { name, date, notes, exercises, startedAt, unit: weightUnit });
-  }, [snapshot, restored, userId, name, date, notes, exercises, startedAt, weightUnit]);
+    saveDraft(userId, { name, date, notes, plan, exercises, startedAt, unit: weightUnit });
+  }, [snapshot, restored, userId, name, date, notes, plan, exercises, startedAt, weightUnit]);
 
   // Tick once a second while the workout is running. The elapsed time is
   // always now - startedAt, never a counter, so it stays right even after
@@ -161,6 +173,10 @@ export default function WorkoutLogger({
         setHistory((prev) => ({ ...prev, ...Object.fromEntries(missing.map((k) => [k, "error" as const])) }));
       });
   }, [historyKeys]);
+
+  // Whether to mark priority exercises with ★: only worth it when some
+  // exercises are optional, otherwise every card would have one.
+  const hasOptional = exercises.some((ex) => ex.isOptional);
 
   // The most recent session of an exercise, or null if none (or not loaded).
   const lastSession = (ex: LoggerExercise) => {
@@ -222,6 +238,18 @@ export default function WorkoutLogger({
     );
   };
 
+  // Tapping a set's number flips it between warm-up ("W") and working set,
+  // so warm-ups can be marked in any workout, not only template ones.
+  const toggleWarmup = (exIdx: number, setIdx: number) => {
+    setExercises((prev) =>
+      prev.map((ex, i) =>
+        i !== exIdx
+          ? ex
+          : { ...ex, sets: ex.sets.map((s, j) => (j !== setIdx ? s : { ...s, isWarmup: !s.isWarmup })) }
+      )
+    );
+  };
+
   const removeSet = (exIdx: number, setIdx: number) => {
     setExercises((prev) =>
       prev.map((ex, i) => (i !== exIdx ? ex : { ...ex, sets: ex.sets.filter((_, j) => j !== setIdx) }))
@@ -234,6 +262,9 @@ export default function WorkoutLogger({
 
   // Swap in place: same position, same number of sets and reps, weights
   // cleared - 100 lbs on a machine says nothing about the dumbbell version.
+  // The same goes for a template's target weights; target reps, warm-up
+  // marks, the note and optional/priority stay, since they describe the
+  // slot in the program rather than the machine.
   // A new uid, because it's a different exercise (see the note on keys).
   const replaceExercise = (exIdx: number, ex: Exercise) => {
     setExercises((prev) =>
@@ -248,8 +279,15 @@ export default function WorkoutLogger({
               equipment: ex.equipments[0] ?? null,
               targetMuscle: ex.targetMuscles[0] ?? null,
               images: ex.images,
+              notes: old.notes,
+              isOptional: old.isOptional,
               sets: old.sets.length
-                ? old.sets.map((s) => ({ reps: s.reps, weight: 0 }))
+                ? old.sets.map((s) => ({
+                    reps: s.reps,
+                    weight: 0,
+                    isWarmup: s.isWarmup,
+                    ...(s.target && { target: { reps: s.target.reps, weight: 0 } }),
+                  }))
                 : [{ reps: 0, weight: 0 }],
             }
       )
@@ -283,12 +321,14 @@ export default function WorkoutLogger({
     if (!finalName) return setError("Give your workout a name.");
     if (exercises.length === 0) return setError("Add at least one exercise.");
     // A box showing a grey hint is still empty, and the server drops sets
-    // without reps - say so rather than lose them quietly.
+    // without reps - say so rather than lose them quietly. (For a template's
+    // planned sets that's the point: skipped ones aren't saved as done.)
     const emptySets = exercises.reduce((n, ex) => n + ex.sets.filter((s) => !(s.reps > 0)).length, 0);
     if (
       emptySets > 0 &&
       !window.confirm(
-        `${emptySets === 1 ? "1 set has" : `${emptySets} sets have`} no reps typed in and won't be saved. Save anyway?`
+        `${emptySets === 1 ? "1 set has" : `${emptySets} sets have`} no reps typed in and won't be saved` +
+          " (that's right for planned sets you skipped). Save anyway?"
       )
     ) {
       return;
@@ -296,9 +336,14 @@ export default function WorkoutLogger({
     setSaving(true);
     try {
       // Inputs are in the user's display unit — store canonical lbs.
+      // Targets are only hints, so they're not sent.
       const payload = exercises.map((ex) => ({
         ...ex,
-        sets: ex.sets.map((s) => ({ ...s, weight: toStoredLbs(s.weight || 0, weightUnit) })),
+        sets: ex.sets.map((s) => ({
+          reps: s.reps,
+          weight: toStoredLbs(s.weight || 0, weightUnit),
+          isWarmup: Boolean(s.isWarmup),
+        })),
       }));
       const res = await fetch(withBasePath("/api/workouts"), {
         method: "POST",
@@ -337,15 +382,33 @@ export default function WorkoutLogger({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        exercises: exercises.map((ex) => ({
-          exerciseId: ex.exerciseId,
-          name: ex.name,
-          bodyPart: ex.bodyPart,
-          equipment: ex.equipment,
-          targetMuscle: ex.targetMuscle,
-          targetSets: ex.sets.length || 3,
-          targetReps: ex.sets[0]?.reps || 10,
-        })),
+        description: plan,
+        exercises: exercises.map((ex) => {
+          // Each set becomes a planned set: what you typed, or the target
+          // you were shown if the boxes are still empty. Sets with neither
+          // are left out. Weights go back to lbs for storage.
+          const sets = ex.sets.flatMap((s) =>
+            s.reps > 0
+              ? [{ reps: s.reps, weight: toStoredLbs(s.weight || 0, weightUnit), isWarmup: Boolean(s.isWarmup) }]
+              : s.target
+                ? [{ reps: s.target.reps, weight: s.target.weight, isWarmup: Boolean(s.isWarmup) }]
+                : []
+          );
+          const firstWorking = sets.find((s) => !s.isWarmup) ?? sets[0];
+          return {
+            exerciseId: ex.exerciseId,
+            name: ex.name,
+            bodyPart: ex.bodyPart,
+            equipment: ex.equipment,
+            targetMuscle: ex.targetMuscle,
+            // Kept filled in as the fallback the database always has.
+            targetSets: sets.filter((s) => !s.isWarmup).length || ex.sets.length || 3,
+            targetReps: firstWorking?.reps || 10,
+            notes: ex.notes ?? null,
+            isOptional: Boolean(ex.isOptional),
+            sets,
+          };
+        }),
       }),
     });
     if (res.ok) {
@@ -421,6 +484,20 @@ export default function WorkoutLogger({
         </div>
       )}
 
+      {/* The template's description - the day's plan - when started from
+          one. Collapsible so it doesn't push the exercises down once read;
+          whitespace-pre-line keeps its line breaks. */}
+      {plan && (
+        <details open className="group mb-5 rounded-xl border border-zinc-800 bg-zinc-900/50">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-semibold [&::-webkit-details-marker]:hidden">
+            Today&apos;s plan
+            <span className="text-sm font-normal text-zinc-500 group-open:hidden">Show</span>
+            <span className="hidden text-sm font-normal text-zinc-500 group-open:inline">Hide</span>
+          </summary>
+          <p className="whitespace-pre-line px-4 pb-4 text-sm leading-relaxed text-zinc-300">{plan}</p>
+        </details>
+      )}
+
       {/* Workout meta */}
       <div className="flex flex-wrap gap-3">
         <input
@@ -484,8 +561,31 @@ export default function WorkoutLogger({
         <div className={`${exercises.length >= 2 ? "mt-3" : "mt-6"} flex flex-col gap-4`}>
           {exercises.map((ex, exIdx) => {
             const last = lastSession(ex);
+            const target = targetSummary(ex.sets, weightUnit);
+            // Working sets are numbered 1, 2, 3...; warm-ups show "W".
+            let working = 0;
+            const labels = ex.sets.map((s) => (s.isWarmup ? "W" : String(++working)));
+            // Last time's hint for each row: working set N gets last time's
+            // working set N, warm-up N gets warm-up N (or the final one of
+            // that kind, for extra sets), so warm-ups never hint a work set.
+            const lastWork = last?.sets.filter((s) => !s.isWarmup) ?? [];
+            const lastWarm = last?.sets.filter((s) => s.isWarmup) ?? [];
+            let warmSeen = 0;
+            let workSeen = 0;
+            const hints = ex.sets.map((s) => {
+              const pool = s.isWarmup ? lastWarm : lastWork;
+              const i = s.isWarmup ? warmSeen++ : workSeen++;
+              return pool[i] ?? pool[pool.length - 1];
+            });
             return (
-            <div key={ex.uid} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+            // Optional exercises (dropped first when tired) get a dashed,
+            // quieter card; with any optional ones present, the others get a ★.
+            <div
+              key={ex.uid}
+              className={`rounded-xl border p-4 ${
+                ex.isOptional ? "border-dashed border-zinc-700 bg-zinc-900/20" : "border-zinc-800 bg-zinc-900/50"
+              }`}
+            >
               {/* The whole header is one button that opens this exercise's
                   history. The name gets its full width and wraps up to three
                   lines before cutting off, as on the summary; Swap and Remove
@@ -506,10 +606,33 @@ export default function WorkoutLogger({
                   />
                 </span>
                 <span className="block min-w-0 flex-1">
-                  <span className="line-clamp-3 font-semibold capitalize leading-snug">{ex.name}</span>
-                  {ex.bodyPart && (
+                  <span className="line-clamp-3 font-semibold capitalize leading-snug">
+                    {hasOptional && !ex.isOptional && (
+                      <span className="text-lime-400" title="Priority">
+                        ★{" "}
+                      </span>
+                    )}
+                    {ex.name}
+                  </span>
+                  {(ex.bodyPart || ex.isOptional) && (
                     <span className="block text-xs capitalize text-zinc-400">
-                      {ex.bodyPart}{ex.equipment ? ` · ${ex.equipment}` : ""}
+                      {ex.isOptional && (
+                        <span className="mr-1.5 rounded bg-zinc-800 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                          Optional
+                        </span>
+                      )}
+                      {/* inline-block: right after the badge, the first word
+                          otherwise doesn't count as a word start for capitalize. */}
+                      <span className="inline-block">
+                        {ex.bodyPart}{ex.equipment ? ` · ${ex.equipment}` : ""}
+                      </span>
+                    </span>
+                  )}
+                  {/* This session's plan, kept visible after you start typing
+                      over the grey hints. */}
+                  {target && (
+                    <span className="mt-0.5 block text-xs tabular-nums text-zinc-300">
+                      <span className="text-lime-400/90">Target:</span> {target}
                     </span>
                   )}
                   {/* Last time, with no tap needed. */}
@@ -520,7 +643,10 @@ export default function WorkoutLogger({
                       {last.sets.map((s, i) => (
                         <Fragment key={i}>
                           {i > 0 && " · "}
-                          <span className="whitespace-nowrap">{formatSet(s, weightUnit)}</span>
+                          <span className={`whitespace-nowrap ${s.isWarmup ? "text-zinc-500" : ""}`}>
+                            {s.isWarmup && "W "}
+                            {formatSet(s, weightUnit)}
+                          </span>
                         </Fragment>
                       ))}
                     </span>
@@ -532,6 +658,13 @@ export default function WorkoutLogger({
                 <span className="sr-only">Show your history</span>
               </button>
 
+              {/* The template's cue for this exercise. */}
+              {ex.notes && (
+                <p className="mt-3 whitespace-pre-line border-l-2 border-lime-400/50 pl-3 text-sm text-zinc-300">
+                  {ex.notes}
+                </p>
+              )}
+
               {/* Sets table */}
               <div className="mt-3 grid grid-cols-[2rem_1fr_1fr_2rem] items-center gap-2 text-sm">
                 <span className="text-xs text-zinc-500">Set</span>
@@ -541,13 +674,15 @@ export default function WorkoutLogger({
                 {ex.sets.map((set, setIdx) => (
                   <SetRow
                     key={setIdx}
-                    index={setIdx}
+                    label={labels[setIdx]}
                     reps={set.reps}
                     weight={set.weight}
-                    // Last time's same set (or its final set, for extra ones).
-                    hint={last ? (last.sets[setIdx] ?? last.sets[last.sets.length - 1]) : undefined}
+                    isWarmup={Boolean(set.isWarmup)}
+                    target={set.target}
+                    hint={hints[setIdx]}
                     weightUnit={weightUnit}
                     onChange={(field, value) => updateSet(exIdx, setIdx, field, value)}
+                    onToggleWarmup={() => toggleWarmup(exIdx, setIdx)}
                     onRemove={() => removeSet(exIdx, setIdx)}
                   />
                 ))}
@@ -665,37 +800,84 @@ export default function WorkoutLogger({
   );
 }
 
-// One set's row. `hint` is the matching set from last time: while a box is
-// empty it shows that number in grey as a placeholder. It's only a hint -
-// nothing is filled in or saved unless you type it.
+// A template's plan for an exercise as one short line, or null if it has no
+// targets: "150 × 5 (3 sets), after 4 warm-ups". The warm-ups' own targets
+// are in their rows; working sets that repeat are counted, not listed.
+// A target weight of 0 means bodyweight or "pick a weight", so it shows reps only.
+function targetSummary(sets: DraftSet[], unit: WeightUnit): string | null {
+  const planned = sets.filter((s) => s.target);
+  if (planned.length === 0) return null;
+  const warmups = planned.filter((s) => s.isWarmup).length;
+  const groups: { text: string; count: number }[] = [];
+  for (const s of planned) {
+    if (s.isWarmup) continue;
+    const t = s.target!;
+    const text = t.weight > 0 ? formatSet(t, unit) : `${t.reps} reps`;
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup?.text === text) lastGroup.count++;
+    else groups.push({ text, count: 1 });
+  }
+  const working = groups.map((g) => (g.count > 1 ? `${g.text} (${g.count} sets)` : g.text)).join(" · ");
+  const warm = warmups ? `${warmups} warm-up${warmups === 1 ? "" : "s"}` : "";
+  if (working && warm) return `${working}, after ${warm}`;
+  return working || warm;
+}
+
+// One set's row. While a box is empty it shows a grey placeholder: the
+// template's target for this set if there is one, otherwise the matching
+// set from last time (`hint`). Either way it's only a hint - nothing is
+// filled in or saved unless you type it.
 function SetRow({
-  index,
+  label,
   reps,
   weight,
+  isWarmup,
+  target,
   hint,
   weightUnit,
   onChange,
+  onToggleWarmup,
   onRemove,
 }: {
-  index: number;
+  label: string; // "1", "2", ... or "W"
   reps: number;
   weight: number;
-  hint?: { reps: number; weight: number };
+  isWarmup: boolean;
+  target?: { reps: number; weight: number }; // weight in lbs
+  hint?: { reps: number; weight: number }; // weight in lbs
   weightUnit: WeightUnit;
   onChange: (field: "reps" | "weight", value: number) => void;
+  onToggleWarmup: () => void;
   onRemove: () => void;
 }) {
-  const cell =
-    "w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center outline-none placeholder:text-zinc-500 focus:border-lime-400";
+  // Warm-up rows are quieter, so the working sets stand out.
+  const cell = `w-full rounded-md border bg-zinc-950 px-2 py-1.5 text-center outline-none placeholder:text-zinc-500 focus:border-lime-400 ${
+    isWarmup ? "border-zinc-800 text-zinc-300" : "border-zinc-700"
+  }`;
+  const show = (lbs: number) => String(toDisplayWeight(lbs, weightUnit));
+  // A target weight of 0 means "bodyweight or your choice": fall back to last time's.
+  const weightHint =
+    target && target.weight > 0 ? show(target.weight) : hint && hint.weight > 0 ? show(hint.weight) : "BW";
+  const name = isWarmup ? "Warm-up set" : `Set ${label}`;
   return (
     <>
-      <span className="text-center text-zinc-500">{index + 1}</span>
+      <button
+        type="button"
+        onClick={onToggleWarmup}
+        className={`rounded py-1 text-center hover:bg-zinc-800 ${
+          isWarmup ? "text-xs font-bold text-amber-400" : "text-zinc-500"
+        }`}
+        aria-label={isWarmup ? "Warm-up set: tap to make it a working set" : `Set ${label}: tap to mark as a warm-up`}
+        title={isWarmup ? "Warm-up (tap to change)" : "Tap to mark as a warm-up"}
+      >
+        {label}
+      </button>
       <input
         type="number"
         min={0}
         value={reps || ""}
-        placeholder={hint ? String(hint.reps) : undefined}
-        aria-label={`Set ${index + 1} reps`}
+        placeholder={target ? String(target.reps) : hint ? String(hint.reps) : undefined}
+        aria-label={`${name} reps`}
         onChange={(e) => onChange("reps", Number(e.target.value))}
         className={cell}
       />
@@ -704,8 +886,8 @@ function SetRow({
         min={0}
         step={0.5}
         value={weight || ""}
-        placeholder={hint && hint.weight > 0 ? String(toDisplayWeight(hint.weight, weightUnit)) : "BW"}
-        aria-label={`Set ${index + 1} weight`}
+        placeholder={weightHint}
+        aria-label={`${name} weight`}
         onChange={(e) => onChange("weight", Number(e.target.value))}
         className={cell}
       />

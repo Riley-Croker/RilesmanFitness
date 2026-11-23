@@ -7,6 +7,7 @@ import type {
   PersonalRecord,
   ProgressPoint,
   Template,
+  TemplateExercise,
   Workout,
   WorkoutSummary,
 } from "@/types";
@@ -55,7 +56,7 @@ export async function getWorkoutDetail(userId: string, workoutId: string): Promi
 
   const [exRows] = await db.execute(
     `SELECT we.id, we.exercise_id, we.name, we.body_part, we.equipment, we.target_muscle,
-            s.id AS set_id, s.reps, s.weight, s.sort_order AS set_order
+            s.id AS set_id, s.reps, s.weight, s.is_warmup, s.sort_order AS set_order
      FROM workout_exercises we
      LEFT JOIN sets s ON s.workout_exercise_id = we.id
      WHERE we.workout_id = ?
@@ -81,6 +82,7 @@ export async function getWorkoutDetail(userId: string, workoutId: string): Promi
         id: row.set_id,
         reps: Number(row.reps),
         weight: Number(row.weight),
+        isWarmup: Boolean(row.is_warmup),
       });
     }
   }
@@ -156,13 +158,15 @@ export async function getTemplates(userId: string): Promise<Template[]> {
   const ids = templates.map((t) => t.id);
   const placeholders = ids.map(() => "?").join(",");
   const [eRows] = await db.execute(
-    `SELECT id, template_id, exercise_id, name, body_part, equipment, target_muscle, target_sets, target_reps
+    `SELECT id, template_id, exercise_id, name, body_part, equipment, target_muscle,
+            target_sets, target_reps, notes, is_optional
      FROM template_exercises WHERE template_id IN (${placeholders}) ORDER BY sort_order`,
     ids
   );
   const byTemplate = new Map(templates.map((t) => [t.id, t]));
+  const byExercise = new Map<string, TemplateExercise>();
   for (const row of eRows as any[]) {
-    byTemplate.get(row.template_id)?.exercises.push({
+    const exercise: TemplateExercise = {
       id: row.id,
       exerciseId: row.exercise_id,
       name: row.name,
@@ -171,7 +175,31 @@ export async function getTemplates(userId: string): Promise<Template[]> {
       targetMuscle: row.target_muscle,
       targetSets: Number(row.target_sets),
       targetReps: Number(row.target_reps),
-    });
+      notes: row.notes?.trim() || null,
+      isOptional: Boolean(row.is_optional),
+      sets: [],
+    };
+    byTemplate.get(row.template_id)?.exercises.push(exercise);
+    byExercise.set(row.id, exercise);
+  }
+
+  // Planned sets for all those exercises in one more query - the same IN
+  // (...) pattern, one level down. Exercises without any keep sets = [].
+  if (byExercise.size > 0) {
+    const exIds = [...byExercise.keys()];
+    const [sRows] = await db.execute(
+      `SELECT template_exercise_id, reps, weight, is_warmup
+       FROM template_sets WHERE template_exercise_id IN (${exIds.map(() => "?").join(",")})
+       ORDER BY template_exercise_id, sort_order`,
+      exIds
+    );
+    for (const row of sRows as any[]) {
+      byExercise.get(row.template_exercise_id)?.sets.push({
+        reps: Number(row.reps),
+        weight: Number(row.weight),
+        isWarmup: Boolean(row.is_warmup),
+      });
+    }
   }
   return templates;
 }
@@ -325,7 +353,7 @@ export async function getRecentExerciseHistory(
   // workout the same number, so it still counts as one session. Exercises
   // whose sets were all left empty (and so not saved) are skipped.
   const [sessionRows] = await db.execute(
-    `SELECT r.k, r.workoutId, r.workoutName, r.date, s.reps, s.weight
+    `SELECT r.k, r.workoutId, r.workoutName, r.date, s.reps, s.weight, s.is_warmup
      FROM (
        SELECT ${keyExpr} AS k, we.id AS weId, we.sort_order AS exOrder,
               w.id AS workoutId, w.name AS workoutName, w.date, w.created_at,
@@ -356,7 +384,7 @@ export async function getRecentExerciseHistory(
       };
       entry.sessions.push(session);
     }
-    session.sets.push({ reps: Number(r.reps), weight: Number(r.weight) });
+    session.sets.push({ reps: Number(r.reps), weight: Number(r.weight), isWarmup: Boolean(r.is_warmup) });
   }
 
   // All-time best: heaviest set, then most reps, earliest on a tie (the

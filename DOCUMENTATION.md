@@ -299,15 +299,26 @@ Then:
    `/api/workouts`, which writes one `workouts` row, one `workout_exercises`
    row per exercise, and one `sets` row per set, then opens the workout's
    summary (4.5).
-5. **Save as template** instead stores the exercise list (with set/rep
-   targets taken from what you entered) as a reusable routine.
+5. **Save as template** instead stores the exercise list as a reusable
+   routine: each set becomes a planned set (what you typed, or its target
+   if you left it empty), with warm-up marks, notes, optional flags and the
+   plan carried over.
+
+**Warm-ups.** Tap a set's number to mark it as a warm-up: it shows **W**,
+the working sets renumber 1, 2, 3, and the row gets quieter. Warm-ups are
+saved with `sets.is_warmup = 1`, shown as W on the workout's page and in the
+history sheet, and left out of the summary's set counts and muscle map
+(volume still counts them).
 
 **Your history, mid-workout.** Three layers, from no taps to one:
 - Each card shows **Last 10/28: 135 × 8 · 135 × 8 · 145 × 6**, your most
   recent session of that exercise.
 - Empty reps and weight boxes show that session's matching set as **grey
-  placeholder text** (set 1 shows last time's set 1; extra sets show its
-  final set). It's only a hint: nothing is saved unless you type it.
+  placeholder text**: working set 1 shows last time's working set 1, a
+  warm-up shows last time's matching warm-up, and extra sets show the final
+  one of their kind. A template's target, when there is one, takes priority
+  (see "Workouts from a template" below). It's only a hint: nothing is saved
+  unless you type it.
 - Tapping the exercise's name or picture opens a **history sheet**
   ([exercise-history-sheet.tsx](src/components/exercise-history-sheet.tsx)):
   the GIF, your best set ever (PR), and your last 5 sessions with each one's
@@ -321,8 +332,32 @@ again for each one added or swapped in (`getRecentExerciseHistory` in
 [queries.ts](src/lib/queries.ts)). Catalogue exercises match their history
 by ExerciseDB id; custom exercises by name, ignoring case
 (`historyKey` in [exercise-history.ts](src/lib/exercise-history.ts)). An
-exercise logged twice in one workout counts as one session. Templates
-pre-fill reps, so for them only the weight boxes show hints.
+exercise logged twice in one workout counts as one session.
+
+**Workouts from a template.** A template can carry a full plan, written by
+hand or inserted with SQL (the training planner does this; the columns are
+in section 5):
+- **Today's plan**: the template's description, at the top of the logger,
+  collapsible, with its line breaks kept (also on the Templates page).
+- **Planned sets** (`template_sets`): one row in the logger per planned set,
+  left **empty**, with the target reps and weight as the grey placeholder.
+  They're never pre-filled because the server drops sets without reps,
+  which is what keeps a planned set you skipped out of your history. A
+  target weight of 0 means "bodyweight or your choice", so that box falls
+  back to last time's weight. Planned warm-ups arrive marked W.
+- **Target line** on the card, e.g. `Target: 150 × 5 (3 sets), after 4
+  warm-ups`, so the plan stays in view after you type over the hints. The
+  "Last" line stays below it.
+- **Note** (`template_exercises.notes`): shown under the exercise name.
+- **Optional** (`template_exercises.is_optional`): an OPTIONAL badge and a
+  dashed card. When a workout has any optional exercises, the others get a
+  lime ★ (priority).
+
+Older templates without planned sets work as before: `target_sets` rows
+with `target_reps` filled in. Swapping an exercise keeps its target reps,
+warm-up marks, note and optional flag, and clears target weights along with
+the weights. All of it is saved in the in-progress draft, so a resumed
+workout keeps its plan.
 
 **Swapping.** Each exercise has **⇄ Swap** for when the equipment is taken.
 It opens a sheet of substitutes
@@ -457,12 +492,23 @@ workout_exercises     — id, workout_id → workouts, exercise_id (catalogue id
                         target_muscle, sort_order
 sets                  — id, workout_exercise_id → workout_exercises,
                         reps, weight (stored in lbs, 0 = bodyweight),
-                        sort_order
-templates             — id, user_id → users, name, description
+                        is_warmup (1 = warm-up), sort_order
+templates             — id, user_id → users, name, description (multi-line
+                        allowed; shown as "Today's plan" in the logger)
 template_exercises    — id, template_id → templates, exercise_id, name,
                         body_part, equipment, target_muscle,
-                        target_sets, target_reps, sort_order
+                        target_sets, target_reps (fallback plan),
+                        notes (cue, up to 500 chars), is_optional, sort_order
+template_sets         — id, template_exercise_id → template_exercises,
+                        sort_order, reps, weight (lbs, 0 = bodyweight or
+                        unspecified), is_warmup
 ```
+
+A template exercise with `template_sets` rows uses them; one without falls
+back to `target_sets` × `target_reps`. Production schema changes are made
+by the migrations in [scripts/migrations/](scripts/migrations/) (the latest,
+`2026-11-22-template-targets.sql`, added `sets.is_warmup`,
+`template_exercises.notes`/`is_optional` and `template_sets`).
 
 All foreign keys use `ON DELETE CASCADE`, so deleting a workout removes its
 exercises and sets automatically, and deleting a user would remove all of
@@ -476,11 +522,11 @@ ever touch the signed-in user's rows.
 | Method & path | Purpose |
 |---|---|
 | `GET /api/workouts` | List your workouts (summaries with counts + volume) |
-| `POST /api/workouts` | Create a workout `{name, date, notes, startedAt?, finishedAt?, exercises:[{exerciseId, name, ..., sets:[{reps, weight}]}]}`. The ISO start/finish times are sent only for live workouts; when kept, `startedAt` becomes the workout's date |
+| `POST /api/workouts` | Create a workout `{name, date, notes, startedAt?, finishedAt?, exercises:[{exerciseId, name, ..., sets:[{reps, weight, isWarmup?}]}]}`. Sets without reps are dropped. The ISO start/finish times are sent only for live workouts; when kept, `startedAt` becomes the workout's date |
 | `GET /api/workouts/[id]` | Full workout with exercises and sets |
 | `DELETE /api/workouts/[id]` | Delete a workout |
 | `GET /api/templates` | List your templates |
-| `POST /api/templates` | Create a template |
+| `POST /api/templates` | Create a template `{name, description?, exercises:[{exerciseId, name, ..., targetSets, targetReps, notes?, isOptional?, sets?:[{reps, weight, isWarmup}]}]}` (weights in lbs) |
 | `GET /api/templates/[id]` | One template |
 | `DELETE /api/templates/[id]` | Delete a template |
 | `GET /api/exercises` | Query the local catalogue: `?search=&bodyPart=&equipment=&muscle=&after=&limit=`. Public; when signed in, ranked by your history first with a `timesDone` count |

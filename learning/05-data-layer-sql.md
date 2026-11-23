@@ -250,7 +250,7 @@ from both midnights that no timezone offset can shift the calendar day.
 need, each wrapped in a typed function. It's the repository layer, and
 you can read all of it, because it's just SQL.
 
-Three patterns worth studying.
+Four patterns worth studying.
 
 ### Aggregation with LEFT JOINs (`getWorkoutSummaries`)
 
@@ -301,6 +301,53 @@ the right bucket.
 This is the part an ORM would do for you (`.Include()` in EF). Doing it by
 hand costs about 15 lines and removes all the mystery about what query
 actually ran.
+
+### Loading a tree one level at a time (`getTemplates`)
+
+Templates are three levels deep: `templates → template_exercises →
+template_sets` (a template's planned sets, each with target reps, weight
+and a warm-up flag). There are two ways to load that, and the difference
+matters.
+
+**The trap: one query per parent.** Load the templates, then loop over them
+and query each one's exercises, then loop over every exercise and query its
+sets. With 5 templates of 6 exercises that's 1 + 5 + 30 = 36 round trips to
+the database. This is called the **N+1 problem**: one query for the list,
+then N more, one per item. Each query is fast; the waiting between them is
+what adds up, and it grows with your data.
+
+**What the code does instead: one query per level.** Load the templates.
+Collect their ids, and fetch every exercise for all of them in one query
+with `WHERE template_id IN (?, ?, ?)` (one `?` per id, built with
+`ids.map(() => "?").join(",")`, so the values are still parameters). Then
+collect the exercise ids and do the same for `template_sets`. Three queries
+total, however many templates there are.
+
+The rows come back flat, so the function puts them in the right place with
+a `Map` from id to object, the same trick as `getWorkoutDetail`:
+
+```ts
+const byExercise = new Map<string, TemplateExercise>();
+// ...filled while reading the exercise rows...
+for (const row of sRows) {
+  byExercise.get(row.template_exercise_id)?.sets.push({ reps: ..., weight: ..., isWarmup: ... });
+}
+```
+
+Exercises with no planned sets simply keep `sets: []`, which is how the
+logger knows to fall back to the older `target_sets × target_reps` plan.
+
+One detail in that loop: `isWarmup: Boolean(row.is_warmup)`. MariaDB has no
+real boolean type. `BOOLEAN` is an alias for `TINYINT(1)`, and mysql2 hands
+the value back as the **number** `0` or `1`. TypeScript's type says
+`boolean`, but nothing checks that at runtime, so the conversion has to be
+written out. Without it, `isWarmup` would be `0`, which mostly behaves like
+`false` but prints as `0` and fails `=== false`.
+
+> **Coming from C#:** EF Core's `.Include(t => t.Exercises).ThenInclude(e
+> => e.Sets)` with split queries generates the same three queries. The
+> N+1 version is what you get from lazy loading, where touching
+> `template.Exercises` inside a loop quietly fires a query each time.
 
 ### The authorisation model, hiding in plain sight
 
@@ -368,11 +415,38 @@ decisions worth noticing:
 - **Weights always stored in lbs.** Conversion happens only at the
   display/input boundary via [src/lib/units.ts](../src/lib/units.ts).
 
+- **Planned vs performed are separate tables.** A template's plan lives in
+  `template_sets` (what you intend to do); a workout's `sets` are what you
+  actually did. The logger shows the plan as grey hints and saves only what
+  you type, so the two never blur together. Both carry an `is_warmup` flag.
+
 [scripts/init-db.ts](../scripts/init-db.ts) runs the schema file via
-`npm run db:init`. That's the whole migration story — intentionally
-primitive. There's no EF Migrations equivalent, no version table, no
-rollback. For a single-developer app that's a reasonable trade; for a team
-you'd want a real migration tool.
+`npm run db:init`. That builds a **new** database correctly, but it can't
+change an existing one: `CREATE TABLE IF NOT EXISTS` skips a table that's
+already there, even if the file now lists more columns for it. Production
+has real data, so it can't be dropped and rebuilt. Each change to an
+existing database is a small hand-written script in
+[scripts/migrations/](../scripts/migrations/), run once on the server.
+
+Those scripts follow two rules that make them safe to run by hand:
+
+- **Idempotent:** running it twice does the same as running it once
+  (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, both MariaDB
+  features). A re-run after a lost connection can't break anything.
+- **Additive:** only add tables and columns, with defaults, never rename or
+  drop. The app version still running doesn't name the new columns in its
+  queries, so it keeps working, and the migration can run *before* the
+  deploy. The new code then finds everything it expects.
+
+[2026-11-22-template-targets.sql](../scripts/migrations/2026-11-22-template-targets.sql)
+is a full example: one new table and three new columns. That's the whole
+migration story, and it's intentionally primitive: no version table, no
+rollback, no record of which scripts have run. For a single-developer app
+that's a reasonable trade; for a team you'd want a real migration tool.
+
+> **Coming from C#:** EF Migrations generates these scripts from your model
+> and records each one it runs in `__EFMigrationsHistory`. Here you write
+> the `ALTER TABLE` yourself and remember (via the docs) which have run.
 
 ---
 

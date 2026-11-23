@@ -21,7 +21,9 @@ through this app's own code.
   muscles-worked body map, saveable as an image for your phone's photos
 - Exercise library: fuzzy search + filters by body part, equipment, muscle;
   detail pages with GIFs and step-by-step instructions
-- Workout templates ("Push Day" → start with one click)
+- Workout templates ("Push Day" → start with one click), optionally carrying
+  a full plan: per-set targets shown as hints, warm-ups, coaching notes,
+  optional exercises and the day's description
 - Progress charts (max weight, estimated 1RM, session volume)
 - Training calendar and automatic personal records
 - Weights in lbs by default, with a per-user lbs/kg toggle in the nav

@@ -5,15 +5,35 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import DeleteButton from "@/components/delete-button";
-import { getTemplates } from "@/lib/queries";
+import { getTemplates, getWeightUnit } from "@/lib/queries";
+import { toDisplayWeight, type WeightUnit } from "@/lib/units";
+import type { TemplateExercise } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+// The plan for one exercise in a few characters: "3 × 5 · 150 lbs +4 W"
+// from planned sets (template_sets), or "3 × 10" for an older template
+// that only has target_sets/target_reps.
+function planLabel(ex: TemplateExercise, unit: WeightUnit): string {
+  if (ex.sets.length === 0) return `${ex.targetSets} × ${ex.targetReps}`;
+  const work = ex.sets.filter((s) => !s.isWarmup);
+  const warmups = ex.sets.length - work.length;
+  const sameReps = new Set(work.map((s) => s.reps)).size === 1;
+  const parts: string[] = [];
+  if (work.length) parts.push(sameReps ? `${work.length} × ${work[0].reps}` : `${work.length} sets`);
+  const top = Math.max(0, ...work.map((s) => s.weight));
+  if (top > 0) parts.push(`${toDisplayWeight(top, unit)} ${unit}`);
+  return `${parts.join(" · ")}${warmups ? ` +${warmups} W` : ""}`.trim();
+}
 
 export default async function TemplatesPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const templates = await getTemplates(session.user.id);
+  const [templates, unit] = await Promise.all([
+    getTemplates(session.user.id),
+    getWeightUnit(session.user.id),
+  ]);
 
   return (
     <div>
@@ -35,14 +55,23 @@ export default async function TemplatesPage() {
           {templates.map((t) => (
             <div key={t.id} className="flex flex-col rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
               <h2 className="text-lg font-semibold">{t.name}</h2>
-              {t.description && <p className="mt-1 text-sm text-zinc-400">{t.description}</p>}
+              {/* pre-line: the description's line breaks are kept. */}
+              {t.description && (
+                <p className="mt-1 whitespace-pre-line text-sm text-zinc-400">{t.description}</p>
+              )}
               <ul className="mt-3 flex flex-1 flex-col gap-1.5 text-sm text-zinc-300">
                 {t.exercises.map((ex) => (
                   <li key={ex.id} className="flex justify-between gap-2">
-                    <span className="capitalize">{ex.name}</span>
-                    <span className="shrink-0 text-zinc-500">
-                      {ex.targetSets} × {ex.targetReps}
+                    <span className={`capitalize ${ex.isOptional ? "text-zinc-500" : ""}`}>
+                      {t.exercises.some((e) => e.isOptional) && !ex.isOptional && (
+                        <span className="text-lime-400" title="Priority">
+                          ★{" "}
+                        </span>
+                      )}
+                      {ex.name}
+                      {ex.isOptional && <span className="ml-1.5 text-xs normal-case">(optional)</span>}
                     </span>
+                    <span className="shrink-0 text-zinc-500">{planLabel(ex, unit)}</span>
                   </li>
                 ))}
               </ul>

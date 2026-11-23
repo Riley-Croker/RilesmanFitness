@@ -12,7 +12,7 @@ export interface HistorySession {
   workoutId: string;
   workoutName: string;
   date: string; // ISO
-  sets: { reps: number; weight: number }[]; // weight in stored lbs, 0 = bodyweight
+  sets: { reps: number; weight: number; isWarmup: boolean }[]; // weight in stored lbs, 0 = bodyweight
 }
 
 export interface ExerciseHistory {

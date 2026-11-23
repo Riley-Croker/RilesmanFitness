@@ -32,6 +32,7 @@ export interface ExercisePage {
 export interface SetInput {
   reps: number;
   weight: number; // stored in lbs; 0 = bodyweight
+  isWarmup?: boolean; // saved as sets.is_warmup; missing = working set
 }
 
 export interface WorkoutExerciseInput {
@@ -58,6 +59,7 @@ export interface WorkoutSet {
   id: string;
   reps: number;
   weight: number;
+  isWarmup: boolean;
 }
 
 export interface WorkoutExercise {
@@ -99,8 +101,20 @@ export interface TemplateExercise {
   bodyPart: string | null;
   equipment: string | null;
   targetMuscle: string | null;
+  // Fallback plan when `sets` is empty: targetSets sets of targetReps.
   targetSets: number;
   targetReps: number;
+  notes: string | null; // a short cue shown under the exercise in the logger
+  isOptional: boolean; // dropped first when short on time; false = priority
+  sets: TemplateSet[]; // planned sets (template_sets), in order; may be empty
+}
+
+// One planned set of a template exercise. Shown in the logger as the grey
+// hint in empty boxes - a target, never a pre-filled value.
+export interface TemplateSet {
+  reps: number;
+  weight: number; // lbs; 0 = bodyweight or unspecified
+  isWarmup: boolean;
 }
 
 export interface Template {
